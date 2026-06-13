@@ -476,7 +476,7 @@ function StudioPage() {
 
 
         {/* Preview center */}
-        <div className="col-span-12 lg:col-span-6 space-y-4">
+        <div className="col-span-12 space-y-4">
           <div className="glass-panel overflow-hidden">
             <div className="aspect-video bg-black relative">
               {active?.imageUrl ? (
