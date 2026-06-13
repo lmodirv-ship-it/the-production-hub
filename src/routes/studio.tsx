@@ -350,7 +350,18 @@ function StudioPage() {
       rec.stop();
       const blob = await done;
       const isMp4 = mime.startsWith("video/mp4");
-      const safeName = (meta?.title ?? "video").replace(/[^a-z0-9\u0600-\u06FF]+/gi, "_");
+      // Filename = site hostname (or topic fallback) — saved to the browser's Downloads folder
+      let safeName = "video";
+      const urlVal = mode === "url" ? input.trim() : "";
+      if (urlVal) {
+        try {
+          const h = new URL(urlVal.startsWith("http") ? urlVal : `https://${urlVal}`).hostname.replace(/^www\./, "");
+          if (h) safeName = h.replace(/[^a-z0-9.-]+/gi, "_");
+        } catch { /* ignore */ }
+      } else if (meta?.title) {
+        safeName = meta.title.replace(/[^a-z0-9\u0600-\u06FF]+/gi, "_");
+      }
+
 
       let finalBlob = blob;
       let ext = isMp4 ? "mp4" : "webm";
