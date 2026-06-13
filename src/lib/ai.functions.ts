@@ -3,8 +3,15 @@ import { z } from "zod";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1";
 
+const UrlInput = z.preprocess((value) => {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}, z.string().url().optional());
+
 const ScriptInput = z.object({
-  url: z.string().url().optional(),
+  url: UrlInput,
   topic: z.string().min(3).max(500).optional(),
   language: z.enum(["ar", "en"]).default("ar"),
 }).refine((v) => v.url || v.topic, { message: "url or topic required" });
@@ -19,7 +26,45 @@ export type ScriptResult = {
   title: string;
   summary: string;
   scenes: Scene[];
+  fallback?: boolean;
 };
+
+function hostnameFromUrl(url?: string) {
+  if (!url) return "موقعك";
+  try { return new URL(url).hostname.replace(/^www\./, ""); }
+  catch { return "موقعك"; }
+}
+
+function pickTextParts(text: string) {
+  const parts = text
+    .split(/[.!؟!،\n]+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 35 && part.length < 220);
+  return parts.length ? parts : [text.slice(0, 180)].filter(Boolean);
+}
+
+function fallbackScript(url: string | undefined, topic: string | undefined, pageText: string): ScriptResult {
+  const site = hostnameFromUrl(url);
+  const parts = pickTextParts(pageText || topic || site);
+  const sceneIdeas = [
+    ["البداية", `في هذا الفيديو السريع نأخذك في جولة داخل ${site}، ونوضح الفكرة الأساسية التي يقدمها الموقع بطريقة مختصرة وواضحة.`],
+    ["الفكرة الرئيسية", parts[0] ? `يعرض الموقع فكرة مهمة: ${parts[0]}` : `يعرض ${site} تجربة رقمية منظمة تساعد الزائر على فهم الخدمة بسرعة.`],
+    ["ما يميّزه", parts[1] ? `من أبرز ما يظهر في الموقع: ${parts[1]}` : "التصميم يركز على الوضوح، سهولة التصفح، وإبراز أهم عناصر الخدمة للزائر."],
+    ["تجربة الزائر", parts[2] ? `أثناء التصفح يكتشف الزائر تفاصيل إضافية مثل: ${parts[2]}` : "الزائر يستطيع الانتقال بين الأقسام بسلاسة والوصول للمعلومة المطلوبة دون تعقيد."],
+    ["الخلاصة", `باختصار، ${site} يقدم حضوراً رقمياً واضحاً ومناسباً للتعريف بالخدمة، وهذا الفيديو يمنح المشاهد لمحة سريعة قبل زيارة الموقع.`],
+  ];
+  return {
+    title: `فيديو تعريفي عن ${site}`,
+    summary: `شرح مختصر لموقع ${site}.`,
+    fallback: true,
+    scenes: sceneIdeas.map(([title, narration], index) => ({
+      id: index + 1,
+      title,
+      narration,
+      imagePrompt: `Professional website presentation slide for ${site}: ${title}. ${narration}`,
+    })),
+  };
+}
 
 async function fetchPageText(url: string): Promise<string> {
   try {
