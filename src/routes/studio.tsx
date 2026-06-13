@@ -349,11 +349,47 @@ function StudioPage() {
 
       rec.stop();
       const blob = await done;
+      const isMp4 = mime.startsWith("video/mp4");
+      const safeName = (meta?.title ?? "video").replace(/[^a-z0-9\u0600-\u06FF]+/gi, "_");
+
+      let finalBlob = blob;
+      let ext = isMp4 ? "mp4" : "webm";
+
+      if (!isMp4) {
+        toast.info("جاري التحويل إلى MP4… قد يستغرق دقيقة");
+        try {
+          const { FFmpeg } = await import("@ffmpeg/ffmpeg");
+          const { fetchFile, toBlobURL } = await import("@ffmpeg/util");
+          const ffmpeg = new FFmpeg();
+          const base = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd";
+          await ffmpeg.load({
+            coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript"),
+            wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm"),
+          });
+          await ffmpeg.writeFile("in.webm", await fetchFile(blob));
+          await ffmpeg.exec([
+            "-i", "in.webm",
+            "-c:v", "libx264",
+            "-preset", "veryfast",
+            "-crf", "23",
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            "out.mp4",
+          ]);
+          const data = await ffmpeg.readFile("out.mp4");
+          finalBlob = new Blob([data as Uint8Array], { type: "video/mp4" });
+          ext = "mp4";
+        } catch (err) {
+          console.error("ffmpeg convert failed", err);
+          toast.error("تعذّر التحويل إلى MP4 — سيتم تنزيل WebM بدلاً منه");
+        }
+      }
+
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `${(meta?.title ?? "video").replace(/[^a-z0-9\u0600-\u06FF]+/gi, "_")}.webm`;
+      a.href = URL.createObjectURL(finalBlob);
+      a.download = `${safeName}.${ext}`;
       a.click();
-      toast.success("تم تصدير الفيديو بنجاح 🎬");
+      toast.success(`تم تصدير الفيديو (${ext.toUpperCase()}) 🎬`);
       const _elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
       void _elapsed;
     } catch (e: unknown) {
