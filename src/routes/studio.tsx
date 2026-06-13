@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import {
   Sparkles, Wand2, Play, Pause, Download, Loader2, ImageIcon,
-  Mic2, Volume2, RefreshCw, Film, Type, ArrowLeft, Plus,
+  Mic2, Volume2, RefreshCw, Film, Type,
 } from "lucide-react";
 import { generateScript, generateSceneImage, type Scene, type ScriptResult } from "@/lib/ai.functions";
 
