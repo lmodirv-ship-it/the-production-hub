@@ -37,6 +37,7 @@ function StudioPage() {
   const [activeIdx, setActiveIdx] = useState(0);
   const [running, setRunning] = useState(false);
   const [voice, setVoice] = useState<SpeechSynthesisVoice | null>(null);
+  const [message, setMessage] = useState("ألصق رابط موقعك واضغط إنشاء الفيديو.");
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
@@ -95,13 +96,16 @@ function StudioPage() {
     setRunning(true);
     setScenes([]);
     setActiveIdx(0);
+    setMessage("بدأ العمل على فيديو تعريفي لموقعك…");
     try {
       // Stage 1: capture + script (server-side combined)
       setStage("capture"); setProgress(5);
       setStage("script"); setProgress(15);
       const result: ScriptResult = await genScript({ data: { url, language: "ar" } });
       const list: SceneState[] = result.scenes.map((s) => ({ ...s }));
+      if (!list.length) throw new Error("لم أستطع تكوين مشاهد للفيديو من هذا الرابط.");
       setScenes(list);
+      setMessage(result.fallback ? "تم إنشاء سكربت احتياطي لأن رصيد الذكاء الاصطناعي غير متاح حالياً." : "تمت كتابة سكربت الفيديو بنجاح.");
       setProgress(30);
 
       // Stage 2: images
@@ -121,12 +125,16 @@ function StudioPage() {
 
       // Stage 4: merge
       setStage("merge");
+      setMessage("يتم الآن تركيب المشاهد وتنزيل ملف الفيديو تلقائياً…");
       await renderVideo(list, url, (p) => setProgress(65 + p * 0.35));
 
       setStage("done"); setProgress(100);
+      setMessage("تم إنشاء الملف وتنزيله. إذا لم يظهر، تحقق من مجلد التنزيلات في المتصفح.");
       toast.success("تم إنشاء الفيديو 🎬");
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "فشل الإنشاء");
+      const text = e instanceof Error ? e.message : "فشل الإنشاء";
+      setMessage(text);
+      toast.error(text);
       setStage("idle");
     } finally {
       setRunning(false);
@@ -332,6 +340,7 @@ function StudioPage() {
             <div className="h-2 rounded-full bg-muted/40 overflow-hidden">
               <div className="h-full bg-gradient-hero transition-[width] duration-300" style={{ width: `${progress}%` }} />
             </div>
+            <p className="text-xs text-muted-foreground leading-relaxed text-right">{message}</p>
           </div>
         </div>
       </section>
