@@ -39,7 +39,10 @@ function StudioPage() {
   const [pitch, setPitch] = useState(1);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
   const playRef = useRef<{ cancelled: boolean }>({ cancelled: false });
+  const exportRef = useRef<{ cancelled: boolean }>({ cancelled: false });
 
   // Load voices
   useEffect(() => {
