@@ -550,45 +550,8 @@ function StudioPage() {
           </div>
         </div>
 
-        {/* Scene editor right */}
-        <aside className="col-span-12 lg:col-span-3 glass-panel p-5 space-y-3">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Type className="size-4 text-neon" /> محرر المشاهد
-          </div>
-          {scenes.length === 0 ? (
-            <p className="text-xs text-muted-foreground">ستظهر المشاهد هنا بعد التوليد. يمكنك تعديل النص ووصف الصورة لكل مشهد.</p>
-          ) : (
-            <>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">عنوان المشهد</label>
-                <input
-                  value={active?.title ?? ""}
-                  onChange={(e) => setScenes((prev) => prev.map((s, i) => i === activeIdx ? { ...s, title: e.target.value } : s))}
-                  className="w-full bg-input/60 border border-border rounded-lg px-3 py-2 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">نص التعليق</label>
-                <textarea
-                  value={active?.narration ?? ""}
-                  onChange={(e) => setScenes((prev) => prev.map((s, i) => i === activeIdx ? { ...s, narration: e.target.value } : s))}
-                  rows={5}
-                  className="w-full bg-input/60 border border-border rounded-lg px-3 py-2 text-sm resize-y"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">وصف الصورة (إنجليزي)</label>
-                <textarea
-                  value={active?.imagePrompt ?? ""}
-                  onChange={(e) => setScenes((prev) => prev.map((s, i) => i === activeIdx ? { ...s, imagePrompt: e.target.value } : s))}
-                  rows={3}
-                  dir="ltr"
-                  className="w-full bg-input/60 border border-border rounded-lg px-3 py-2 text-sm resize-y text-left"
-                />
-              </div>
-            </>
-          )}
-        </aside>
+        {/* Scene editor & image editor work silently in the background — UI hidden by request */}
+
       </section>
 
       {meta && (
