@@ -377,7 +377,8 @@ function StudioPage() {
             "out.mp4",
           ]);
           const data = await ffmpeg.readFile("out.mp4");
-          finalBlob = new Blob([data as Uint8Array], { type: "video/mp4" });
+          const u8 = data as Uint8Array;
+          finalBlob = new Blob([u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer], { type: "video/mp4" });
           ext = "mp4";
         } catch (err) {
           console.error("ffmpeg convert failed", err);
