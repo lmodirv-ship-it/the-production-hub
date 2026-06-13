@@ -85,11 +85,12 @@ export const generateScript = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => ScriptInput.parse(d))
   .handler(async ({ data }): Promise<ScriptResult> => {
     const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("AI not configured");
+    if (!key) throw new Error("خدمة الذكاء الاصطناعي غير مفعّلة حالياً.");
 
     let context = data.topic ?? "";
+    let pageText = "";
     if (data.url) {
-      const pageText = await fetchPageText(data.url);
+      pageText = await fetchPageText(data.url);
       context = `URL: ${data.url}\n\nContent excerpt:\n${pageText || "(no readable content)"}\n\n${context}`;
     }
 
@@ -133,7 +134,7 @@ Exactly 5 scenes. No markdown, no commentary outside JSON.`;
     if (!res.ok) {
       const txt = await res.text();
       if (res.status === 429) throw new Error("الحد الأقصى للطلبات. جرّب بعد قليل.");
-      if (res.status === 402) throw new Error("نفدت أرصدة الذكاء الاصطناعي. أضف رصيداً للمتابعة.");
+      if (res.status === 402) return fallbackScript(data.url, data.topic, pageText);
       throw new Error(`AI error: ${res.status} ${txt.slice(0, 200)}`);
     }
     const json = await res.json() as { choices: Array<{ message: { content: string } }> };
@@ -150,6 +151,7 @@ Exactly 5 scenes. No markdown, no commentary outside JSON.`;
       narration: s.narration ?? "",
       imagePrompt: s.imagePrompt ?? s.title ?? "",
     }));
+    if (!parsed.scenes.length) return fallbackScript(data.url, data.topic, pageText);
     return parsed;
   });
 
