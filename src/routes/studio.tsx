@@ -471,66 +471,12 @@ function StudioPage() {
         </div>
       </section>
 
-      {/* Studio grid */}
+      {/* Studio grid — only the preview is visible; scene & image editors run in the background */}
       <section className="container mx-auto px-6 mt-6 grid grid-cols-12 gap-4 pb-12">
-        {/* Voice & audio (left) */}
-        <aside className="col-span-12 lg:col-span-3 glass-panel p-5 space-y-4">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Mic2 className="size-4 text-neon" /> الصوت والتعليق
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">صوت الراوي</label>
-            <select
-              value={voice?.name ?? ""}
-              onChange={(e) => setVoice(voices.find((v) => v.name === e.target.value) ?? null)}
-              className="mt-1 w-full bg-input/60 border border-border rounded-lg px-3 py-2 text-sm"
-            >
-              {arabicVoices.length > 0 && (
-                <optgroup label="عربي">
-                  {arabicVoices.map((v) => <option key={v.name} value={v.name}>{v.name} ({v.lang})</option>)}
-                </optgroup>
-              )}
-              {otherVoices.length > 0 && (
-                <optgroup label="أخرى">
-                  {otherVoices.map((v) => <option key={v.name} value={v.name}>{v.name} ({v.lang})</option>)}
-                </optgroup>
-              )}
-              {voices.length === 0 && <option>الأصوات قيد التحميل…</option>}
-            </select>
-          </div>
-          <div>
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>السرعة</span><span>{rate.toFixed(2)}x</span>
-            </div>
-            <input type="range" min={0.5} max={1.5} step={0.05} value={rate} onChange={(e) => setRate(+e.target.value)} className="w-full accent-[oklch(0.84_0.18_200)]" />
-          </div>
-          <div>
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>النغمة</span><span>{pitch.toFixed(2)}</span>
-            </div>
-            <input type="range" min={0.5} max={1.5} step={0.05} value={pitch} onChange={(e) => setPitch(+e.target.value)} className="w-full accent-[oklch(0.84_0.18_200)]" />
-          </div>
-          <button
-            onClick={() => active && speak(active.narration)}
-            disabled={!active}
-            className="w-full rounded-lg border border-border py-2 text-sm hover:bg-accent inline-flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            <Volume2 className="size-4" /> معاينة المشهد الحالي
-          </button>
 
-          <div className="pt-3 border-t border-border space-y-2">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <Film className="size-4 text-neon" /> توليد الفيديو
-            </div>
-            <div className="h-2 bg-muted rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-hero transition-all" style={{ width: `${progress}%` }} />
-            </div>
-            <p className="text-xs text-muted-foreground">{playing ? "جاري التشغيل…" : progress === 100 ? "اكتمل" : "جاهز للتشغيل"}</p>
-          </div>
-        </aside>
 
         {/* Preview center */}
-        <div className="col-span-12 lg:col-span-6 space-y-4">
+        <div className="col-span-12 space-y-4">
           <div className="glass-panel overflow-hidden">
             <div className="aspect-video bg-black relative">
               {active?.imageUrl ? (
@@ -604,45 +550,8 @@ function StudioPage() {
           </div>
         </div>
 
-        {/* Scene editor right */}
-        <aside className="col-span-12 lg:col-span-3 glass-panel p-5 space-y-3">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Type className="size-4 text-neon" /> محرر المشاهد
-          </div>
-          {scenes.length === 0 ? (
-            <p className="text-xs text-muted-foreground">ستظهر المشاهد هنا بعد التوليد. يمكنك تعديل النص ووصف الصورة لكل مشهد.</p>
-          ) : (
-            <>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">عنوان المشهد</label>
-                <input
-                  value={active?.title ?? ""}
-                  onChange={(e) => setScenes((prev) => prev.map((s, i) => i === activeIdx ? { ...s, title: e.target.value } : s))}
-                  className="w-full bg-input/60 border border-border rounded-lg px-3 py-2 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">نص التعليق</label>
-                <textarea
-                  value={active?.narration ?? ""}
-                  onChange={(e) => setScenes((prev) => prev.map((s, i) => i === activeIdx ? { ...s, narration: e.target.value } : s))}
-                  rows={5}
-                  className="w-full bg-input/60 border border-border rounded-lg px-3 py-2 text-sm resize-y"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">وصف الصورة (إنجليزي)</label>
-                <textarea
-                  value={active?.imagePrompt ?? ""}
-                  onChange={(e) => setScenes((prev) => prev.map((s, i) => i === activeIdx ? { ...s, imagePrompt: e.target.value } : s))}
-                  rows={3}
-                  dir="ltr"
-                  className="w-full bg-input/60 border border-border rounded-lg px-3 py-2 text-sm resize-y text-left"
-                />
-              </div>
-            </>
-          )}
-        </aside>
+        {/* Scene editor & image editor work silently in the background — UI hidden by request */}
+
       </section>
 
       {meta && (
