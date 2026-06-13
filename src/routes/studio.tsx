@@ -368,7 +368,7 @@ function StudioPage() {
     exportRef.current.cancelled = true;
   }
 
-
+  const active = scenes[activeIdx];
   const arabicVoices = useMemo(() => voices.filter((v) => v.lang.startsWith("ar")), [voices]);
   const otherVoices = useMemo(() => voices.filter((v) => !v.lang.startsWith("ar")).slice(0, 8), [voices]);
 
