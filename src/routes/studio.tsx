@@ -386,6 +386,15 @@ function StudioPage() {
           <button onClick={exportScript} disabled={!scenes.length} className="rounded-lg border border-border px-3 py-2 text-sm hover:bg-accent inline-flex items-center gap-2 disabled:opacity-50">
             <Download className="size-4" /> تنزيل السكربت
           </button>
+          {exporting ? (
+            <button onClick={cancelExport} className="rounded-lg bg-destructive px-3 py-2 text-sm inline-flex items-center gap-2">
+              <Loader2 className="size-4 animate-spin" /> إلغاء ({exportProgress.toFixed(0)}%)
+            </button>
+          ) : (
+            <button onClick={exportVideo} disabled={!scenes.length} className="rounded-lg bg-gradient-hero px-3 py-2 text-sm font-semibold text-primary-foreground inline-flex items-center gap-2 disabled:opacity-50">
+              <Video className="size-4" /> تصدير فيديو
+            </button>
+          )}
         </div>
       </header>
 
