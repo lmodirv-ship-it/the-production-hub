@@ -236,6 +236,8 @@ function StudioPage() {
       } catch {}
 
       const mimeCandidates = [
+        "video/mp4;codecs=avc1.42E01E",
+        "video/mp4",
         "video/webm;codecs=vp9,opus",
         "video/webm;codecs=vp8,opus",
         "video/webm",
