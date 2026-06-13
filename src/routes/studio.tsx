@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { Sparkles, Wand2, Loader2, Video } from "lucide-react";
-import { generateScript, generateSceneImage, type Scene, type ScriptResult } from "@/lib/ai.functions";
+import { generateScript, captureScreenshots, type Scene, type ScriptResult } from "@/lib/ai.functions";
 
 const search = z.object({ url: z.string().optional() }).partial();
 
@@ -28,7 +28,7 @@ const STAGE_LABEL: Record<Stage, string> = {
 function StudioPage() {
   const sp = useSearch({ from: "/studio" });
   const genScript = useServerFn(generateScript);
-  const genImage = useServerFn(generateSceneImage);
+  const capture = useServerFn(captureScreenshots);
 
   const [input, setInput] = useState(sp.url ?? "");
   const [stage, setStage] = useState<Stage>("idle");
@@ -98,26 +98,25 @@ function StudioPage() {
     setActiveIdx(0);
     setMessage("بدأ العمل على فيديو تعريفي لموقعك…");
     try {
-      // Stage 1: capture + script (server-side combined)
+      // Stage 1: capture real screenshots of the website
       setStage("capture"); setProgress(5);
-      setStage("script"); setProgress(15);
-      const result: ScriptResult = await genScript({ data: { url, language: "ar" } });
-      const list: SceneState[] = result.scenes.map((s) => ({ ...s }));
-      if (!list.length) throw new Error("لم أستطع تكوين مشاهد للفيديو من هذا الرابط.");
-      setScenes(list);
-      setMessage(result.fallback ? "تم إنشاء سكربت احتياطي لأن رصيد الذكاء الاصطناعي غير متاح حالياً." : "تمت كتابة سكربت الفيديو بنجاح.");
+      setMessage("جاري التقاط صور حقيقية من موقعك…");
+      const shotsRes = await capture({ data: { url, count: 5 } }).catch(() => ({ shots: [] as string[], pages: [] as string[] }));
       setProgress(30);
 
-      // Stage 2: images
-      for (let i = 0; i < list.length; i++) {
-        try {
-          const { dataUrl } = await genImage({ data: { prompt: list[i].imagePrompt } });
-          list[i] = { ...list[i], imageUrl: dataUrl };
-          setScenes([...list]);
-          setActiveIdx(i);
-        } catch { /* skip */ }
-        setProgress(30 + ((i + 1) / list.length) * 30);
-      }
+      // Stage 2: script
+      setStage("script");
+      setMessage("جاري كتابة سكربت الفيديو…");
+      const result: ScriptResult = await genScript({ data: { url, language: "ar" } });
+      const list: SceneState[] = result.scenes.map((s, i) => ({
+        ...s,
+        imageUrl: shotsRes.shots[i] || shotsRes.shots[0] || undefined,
+      }));
+      if (!list.length) throw new Error("لم أستطع تكوين مشاهد للفيديو من هذا الرابط.");
+      setScenes(list);
+      setActiveIdx(0);
+      setMessage(result.fallback ? "سكربت احتياطي (الذكاء الاصطناعي غير متاح حالياً) — مع صور حقيقية لموقعك." : "تمت كتابة السكربت ✓");
+      setProgress(60);
 
       // Stage 3: voice (preparing — actual TTS runs inside merge)
       setStage("voice"); setProgress(65);
