@@ -160,7 +160,215 @@ function StudioPage() {
     a.click();
   }
 
-  const active = scenes[activeIdx];
+  function loadImg(src: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+  }
+
+  function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+    const words = text.split(/\s+/);
+    const lines: string[] = [];
+    let line = "";
+    for (const w of words) {
+      const test = line ? line + " " + w : w;
+      if (ctx.measureText(test).width > maxWidth && line) {
+        lines.push(line);
+        line = w;
+      } else line = test;
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  async function exportVideo() {
+    if (!scenes.length) { toast.error("لا توجد مشاهد لتصديرها"); return; }
+    setExporting(true);
+    setExportProgress(0);
+    exportRef.current = { cancelled: false };
+    try {
+      // 1) Ensure all images are generated
+      const ready: SceneState[] = [...scenes];
+      for (let i = 0; i < ready.length; i++) {
+        if (exportRef.current.cancelled) throw new Error("cancelled");
+        if (!ready[i].imageUrl) {
+          toast.info(`توليد صورة المشهد ${i + 1}…`);
+          try {
+            const { dataUrl } = await genImage({ data: { prompt: ready[i].imagePrompt } });
+            ready[i] = { ...ready[i], imageUrl: dataUrl };
+            setScenes((prev) => prev.map((s, idx) => idx === i ? { ...s, imageUrl: dataUrl } : s));
+          } catch {
+            toast.error(`تعذّر توليد صورة المشهد ${i + 1}`);
+          }
+        }
+        setExportProgress(((i + 1) / (ready.length * 2)) * 100);
+      }
+
+      // 2) Pre-load image elements
+      const imgs: (HTMLImageElement | null)[] = [];
+      for (const s of ready) {
+        imgs.push(s.imageUrl ? await loadImg(s.imageUrl).catch(() => null) : null);
+      }
+
+      // 3) Setup canvas + MediaRecorder
+      const W = 1280, H = 720;
+      const canvas = document.createElement("canvas");
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext("2d")!;
+      const fps = 30;
+      const stream = canvas.captureStream(fps);
+
+      // Try to add silent audio track for compatibility
+      try {
+        const ac = new AudioContext();
+        const osc = ac.createOscillator();
+        const gain = ac.createGain();
+        gain.gain.value = 0;
+        osc.connect(gain);
+        const dest = ac.createMediaStreamDestination();
+        gain.connect(dest);
+        osc.start();
+        dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+      } catch {}
+
+      const mimeCandidates = [
+        "video/webm;codecs=vp9,opus",
+        "video/webm;codecs=vp8,opus",
+        "video/webm",
+      ];
+      const mime = mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) ?? "video/webm";
+      const chunks: Blob[] = [];
+      const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 4_000_000 });
+      rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+      const done = new Promise<Blob>((resolve) => {
+        rec.onstop = () => resolve(new Blob(chunks, { type: mime }));
+      });
+      rec.start(100);
+
+      // 4) Animate each scene with Ken Burns + caption
+      const totalScenes = ready.length;
+      // Estimate duration per scene from narration length (Arabic ~3 chars/sec spoken slow → use words)
+      const durations = ready.map((s) => {
+        const words = s.narration.trim().split(/\s+/).length;
+        return Math.max(3.5, Math.min(9, words / 2.2));
+      });
+
+      const startTime = performance.now();
+      for (let i = 0; i < totalScenes; i++) {
+        if (exportRef.current.cancelled) break;
+        const sceneDur = durations[i] * 1000;
+        const sceneStart = performance.now();
+        const img = imgs[i];
+        const scene = ready[i];
+
+        while (true) {
+          if (exportRef.current.cancelled) break;
+          const t = performance.now() - sceneStart;
+          if (t >= sceneDur) break;
+          const p = t / sceneDur; // 0..1
+
+          // BG
+          ctx.fillStyle = "#0a0a14";
+          ctx.fillRect(0, 0, W, H);
+
+          if (img) {
+            // Ken Burns: zoom 1.0 → 1.12, slight pan
+            const zoom = 1.0 + 0.12 * p;
+            const iw = img.width, ih = img.height;
+            const scale = Math.max(W / iw, H / ih) * zoom;
+            const dw = iw * scale, dh = ih * scale;
+            const panX = (p - 0.5) * 40;
+            const panY = (p - 0.5) * 20;
+            const dx = (W - dw) / 2 + panX;
+            const dy = (H - dh) / 2 + panY;
+            ctx.drawImage(img, dx, dy, dw, dh);
+          } else {
+            const grad = ctx.createLinearGradient(0, 0, W, H);
+            grad.addColorStop(0, "#1a103d");
+            grad.addColorStop(1, "#0a0a14");
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, W, H);
+          }
+
+          // Bottom gradient overlay
+          const og = ctx.createLinearGradient(0, H * 0.45, 0, H);
+          og.addColorStop(0, "rgba(0,0,0,0)");
+          og.addColorStop(1, "rgba(0,0,0,0.85)");
+          ctx.fillStyle = og;
+          ctx.fillRect(0, H * 0.45, W, H * 0.55);
+
+          // Title (top-left fade-in)
+          const fadeIn = Math.min(1, p * 4);
+          ctx.globalAlpha = fadeIn;
+          ctx.fillStyle = "#a78bfa";
+          ctx.font = "600 26px 'Tajawal', system-ui, sans-serif";
+          ctx.textAlign = "right";
+          ctx.direction = "rtl";
+          ctx.fillText(`المشهد ${i + 1} / ${totalScenes}`, W - 40, 50);
+
+          ctx.fillStyle = "#fff";
+          ctx.font = "700 42px 'Tajawal', system-ui, sans-serif";
+          ctx.fillText(scene.title, W - 40, 100);
+          ctx.globalAlpha = 1;
+
+          // Narration caption (bottom, wrapped)
+          ctx.fillStyle = "#fff";
+          ctx.font = "500 30px 'Tajawal', system-ui, sans-serif";
+          ctx.textAlign = "right";
+          const maxW = W - 80;
+          const lines = wrapText(ctx, scene.narration, maxW);
+          const lineH = 42;
+          const baseY = H - 60 - (lines.length - 1) * lineH;
+          for (let li = 0; li < lines.length; li++) {
+            ctx.fillText(lines[li], W - 40, baseY + li * lineH);
+          }
+
+          // Progress bar
+          const overall = (i + p) / totalScenes;
+          ctx.fillStyle = "rgba(255,255,255,0.15)";
+          ctx.fillRect(40, H - 14, W - 80, 4);
+          ctx.fillStyle = "#a78bfa";
+          ctx.fillRect(40, H - 14, (W - 80) * overall, 4);
+
+          // Branding
+          ctx.textAlign = "left";
+          ctx.fillStyle = "rgba(255,255,255,0.6)";
+          ctx.font = "600 20px system-ui, sans-serif";
+          ctx.fillText("EcoAI Studio", 40, 50);
+
+          setExportProgress(50 + overall * 50);
+          await new Promise((r) => setTimeout(r, 1000 / fps));
+        }
+      }
+
+      rec.stop();
+      const blob = await done;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${(meta?.title ?? "video").replace(/[^a-z0-9\u0600-\u06FF]+/gi, "_")}.webm`;
+      a.click();
+      toast.success("تم تصدير الفيديو بنجاح 🎬");
+      const _elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+      void _elapsed;
+    } catch (e: unknown) {
+      if ((e as Error)?.message !== "cancelled") {
+        toast.error(e instanceof Error ? e.message : "فشل تصدير الفيديو");
+      }
+    } finally {
+      setExporting(false);
+      setExportProgress(0);
+    }
+  }
+
+  function cancelExport() {
+    exportRef.current.cancelled = true;
+  }
+
+
   const arabicVoices = useMemo(() => voices.filter((v) => v.lang.startsWith("ar")), [voices]);
   const otherVoices = useMemo(() => voices.filter((v) => !v.lang.startsWith("ar")).slice(0, 8), [voices]);
 
