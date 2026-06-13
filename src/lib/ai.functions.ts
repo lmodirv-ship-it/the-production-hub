@@ -155,40 +155,58 @@ Exactly 5 scenes. No markdown, no commentary outside JSON.`;
     return parsed;
   });
 
-const ImageInput = z.object({ prompt: z.string().min(3).max(1000) });
+function extractLinks(html: string, baseUrl: string): string[] {
+  const out = new Set<string>();
+  const base = new URL(baseUrl);
+  const re = /<a\s[^>]*href=["']([^"'#]+)["']/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) {
+    try {
+      const u = new URL(m[1], base);
+      if (u.hostname.replace(/^www\./, "") !== base.hostname.replace(/^www\./, "")) continue;
+      if (/\.(png|jpe?g|gif|svg|webp|pdf|zip|mp4|css|js)(\?|$)/i.test(u.pathname)) continue;
+      u.hash = ""; u.search = "";
+      out.add(u.toString());
+    } catch { /* skip */ }
+  }
+  return Array.from(out);
+}
 
-export const generateSceneImage = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => ImageInput.parse(d))
-  .handler(async ({ data }): Promise<{ dataUrl: string }> => {
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) throw new Error("AI not configured");
+async function shotToDataUrl(targetUrl: string): Promise<string | null> {
+  // thum.io: free screenshot service, no auth required
+  const shotUrl = `https://image.thum.io/get/width/1280/crop/720/noanimate/${targetUrl}`;
+  try {
+    const res = await fetch(shotUrl);
+    if (!res.ok) return null;
+    const buf = new Uint8Array(await res.arrayBuffer());
+    if (buf.byteLength < 2000) return null; // probably placeholder
+    let bin = ""; for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+    const b64 = btoa(bin);
+    const mime = res.headers.get("content-type") ?? "image/jpeg";
+    return `data:${mime};base64,${b64}`;
+  } catch { return null; }
+}
 
-    const res = await fetch(`${GATEWAY}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${key}`,
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image",
-        messages: [{
-          role: "user",
-          content: `Cinematic, modern, vibrant, high quality illustration. ${data.prompt}. Wide aspect, professional video still, deep purple and cyan accent lighting.`,
-        }],
-        modalities: ["image", "text"],
-      }),
-    });
+const ScreenshotsInput = z.object({ url: UrlInput, count: z.number().min(1).max(8).default(5) });
 
-    if (!res.ok) {
-      const txt = await res.text();
-      if (res.status === 429) throw new Error("الحد الأقصى للطلبات.");
-      if (res.status === 402) throw new Error("نفدت أرصدة الذكاء الاصطناعي.");
-      throw new Error(`Image error: ${res.status} ${txt.slice(0, 200)}`);
+export const captureScreenshots = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => ScreenshotsInput.parse(d))
+  .handler(async ({ data }): Promise<{ shots: string[]; pages: string[] }> => {
+    const url = data.url!;
+    let html = "";
+    try {
+      const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 EcoAI/1.0" } });
+      if (r.ok) html = await r.text();
+    } catch { /* ignore */ }
+
+    const links = extractLinks(html, url);
+    const pages = [url, ...links.filter((l) => l !== url)].slice(0, data.count);
+    while (pages.length < data.count) pages.push(url);
+
+    const shots: string[] = [];
+    for (const p of pages) {
+      const s = await shotToDataUrl(p);
+      shots.push(s ?? "");
     }
-    const json = await res.json() as {
-      choices: Array<{ message: { images?: Array<{ image_url: { url: string } }> } }>;
-    };
-    const url = json.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-    if (!url) throw new Error("لم يتم توليد صورة");
-    return { dataUrl: url };
+    return { shots, pages };
   });
