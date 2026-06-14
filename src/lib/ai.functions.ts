@@ -155,58 +155,84 @@ Exactly 5 scenes. No markdown, no commentary outside JSON.`;
     return parsed;
   });
 
-function extractLinks(html: string, baseUrl: string): string[] {
-  const out = new Set<string>();
-  const base = new URL(baseUrl);
-  const re = /<a\s[^>]*href=["']([^"'#]+)["']/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html))) {
-    try {
-      const u = new URL(m[1], base);
-      if (u.hostname.replace(/^www\./, "") !== base.hostname.replace(/^www\./, "")) continue;
-      if (/\.(png|jpe?g|gif|svg|webp|pdf|zip|mp4|css|js)(\?|$)/i.test(u.pathname)) continue;
-      u.hash = ""; u.search = "";
-      out.add(u.toString());
-    } catch { /* skip */ }
-  }
-  return Array.from(out);
-}
-
-async function shotToDataUrl(targetUrl: string): Promise<string | null> {
-  // thum.io: free screenshot service, no auth required
-  const shotUrl = `https://image.thum.io/get/width/1280/crop/720/noanimate/${targetUrl}`;
-  try {
-    const res = await fetch(shotUrl);
-    if (!res.ok) return null;
-    const buf = new Uint8Array(await res.arrayBuffer());
-    if (buf.byteLength < 2000) return null; // probably placeholder
-    let bin = ""; for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
-    const b64 = btoa(bin);
-    const mime = res.headers.get("content-type") ?? "image/jpeg";
-    return `data:${mime};base64,${b64}`;
-  } catch { return null; }
-}
+export type Branding = {
+  primary?: string;
+  accent?: string;
+  background?: string;
+  textPrimary?: string;
+  logo?: string;
+};
 
 const ScreenshotsInput = z.object({ url: UrlInput, count: z.number().min(1).max(8).default(5) });
 
 export const captureScreenshots = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => ScreenshotsInput.parse(d))
-  .handler(async ({ data }): Promise<{ shots: string[]; pages: string[] }> => {
+  .handler(async ({ data }): Promise<{ shots: string[]; pages: string[]; branding: Branding; content: string; title: string }> => {
     const url = data.url!;
-    let html = "";
-    try {
-      const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 EcoAI/1.0" } });
-      if (r.ok) html = await r.text();
-    } catch { /* ignore */ }
+    const key = process.env.FIRECRAWL_API_KEY;
+    if (!key) {
+      return { shots: [], pages: [url], branding: {}, content: "", title: hostnameFromUrl(url) };
+    }
 
-    const links = extractLinks(html, url);
-    const pages = [url, ...links.filter((l) => l !== url)].slice(0, data.count);
+    const headers = { Authorization: `Bearer ${key}`, "Content-Type": "application/json" };
+
+    // 1) Discover internal pages via map
+    let pages: string[] = [url];
+    try {
+      const mapRes = await fetch("https://api.firecrawl.dev/v2/map", {
+        method: "POST", headers,
+        body: JSON.stringify({ url, limit: data.count + 3 }),
+      });
+      if (mapRes.ok) {
+        const j = await mapRes.json() as { links?: Array<string | { url: string }> };
+        const links = (j.links ?? []).map((l) => typeof l === "string" ? l : l.url).filter(Boolean);
+        const uniq = Array.from(new Set([url, ...links]));
+        pages = uniq.slice(0, data.count);
+      }
+    } catch { /* ignore */ }
     while (pages.length < data.count) pages.push(url);
 
+    // 2) Scrape each page: screenshot, plus markdown+branding for the first
     const shots: string[] = [];
-    for (const p of pages) {
-      const s = await shotToDataUrl(p);
-      shots.push(s ?? "");
+    let branding: Branding = {};
+    let content = "";
+    let title = hostnameFromUrl(url);
+
+    for (let i = 0; i < pages.length; i++) {
+      const isFirst = i === 0;
+      const formats: unknown[] = ["screenshot"];
+      if (isFirst) { formats.push("markdown"); formats.push("branding"); }
+      try {
+        const r = await fetch("https://api.firecrawl.dev/v2/scrape", {
+          method: "POST", headers,
+          body: JSON.stringify({ url: pages[i], formats, onlyMainContent: true }),
+        });
+        if (!r.ok) { shots.push(""); continue; }
+        const j = await r.json() as {
+          data?: {
+            screenshot?: string;
+            markdown?: string;
+            metadata?: { title?: string };
+            branding?: {
+              logo?: string;
+              colors?: { primary?: string; accent?: string; background?: string; textPrimary?: string };
+            };
+          };
+        };
+        const d = j.data ?? {};
+        shots.push(d.screenshot ?? "");
+        if (isFirst) {
+          content = (d.markdown ?? "").slice(0, 4000);
+          title = d.metadata?.title ?? title;
+          const c = d.branding?.colors ?? {};
+          branding = {
+            primary: c.primary, accent: c.accent,
+            background: c.background, textPrimary: c.textPrimary,
+            logo: d.branding?.logo,
+          };
+        }
+      } catch { shots.push(""); }
     }
-    return { shots, pages };
+
+    return { shots, pages, branding, content, title };
   });
