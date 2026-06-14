@@ -239,10 +239,11 @@ export const captureScreenshots = createServerFn({ method: "POST" })
           content = (d.markdown ?? "").slice(0, 4000);
           title = d.metadata?.title ?? title;
           const c = d.branding?.colors ?? {};
+          const logoUrl = d.branding?.logo;
           branding = {
             primary: c.primary, accent: c.accent,
             background: c.background, textPrimary: c.textPrimary,
-            logo: d.branding?.logo,
+            logo: logoUrl ? await urlToDataUrl(logoUrl) : undefined,
           };
         }
       } catch { shots.push(""); }
