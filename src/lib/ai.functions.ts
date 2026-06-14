@@ -165,6 +165,20 @@ export type Branding = {
 
 const ScreenshotsInput = z.object({ url: UrlInput, count: z.number().min(1).max(8).default(5) });
 
+async function urlToDataUrl(u: string): Promise<string> {
+  if (!u) return "";
+  if (u.startsWith("data:")) return u;
+  try {
+    const r = await fetch(u);
+    if (!r.ok) return "";
+    const buf = new Uint8Array(await r.arrayBuffer());
+    if (buf.byteLength < 1000) return "";
+    let bin = ""; for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+    const mime = r.headers.get("content-type") ?? "image/png";
+    return `data:${mime};base64,${btoa(bin)}`;
+  } catch { return ""; }
+}
+
 export const captureScreenshots = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => ScreenshotsInput.parse(d))
   .handler(async ({ data }): Promise<{ shots: string[]; pages: string[]; branding: Branding; content: string; title: string }> => {
