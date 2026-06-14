@@ -1,10 +1,10 @@
 import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
-import { Sparkles, Wand2, Loader2, Video } from "lucide-react";
-import { generateScript, captureScreenshots, type Scene, type ScriptResult } from "@/lib/ai.functions";
+import { Sparkles, Wand2, Loader2, Video, Download, RefreshCw } from "lucide-react";
+import { generateScript, captureScreenshots, type Scene, type ScriptResult, type Branding } from "@/lib/ai.functions";
 
 const search = z.object({ url: z.string().optional() }).partial();
 
@@ -13,15 +13,14 @@ export const Route = createFileRoute("/studio")({
   component: StudioPage,
 });
 
-type SceneState = Scene & { imageUrl?: string };
-type Stage = "idle" | "capture" | "script" | "voice" | "merge" | "done";
+type SceneState = Scene & { imageUrl?: string; isIntro?: boolean; isOutro?: boolean };
+type Stage = "idle" | "capture" | "script" | "merge" | "done";
 
 const STAGE_LABEL: Record<Stage, string> = {
   idle: "جاهز",
-  capture: "التقاط صور الموقع…",
+  capture: "التقاط صور وهوية الموقع…",
   script: "كتابة النص…",
-  voice: "تجهيز الصوت…",
-  merge: "دمج الفيديو…",
+  merge: "تركيب الفيديو…",
   done: "اكتمل ✓",
 };
 
@@ -38,6 +37,8 @@ function StudioPage() {
   const [running, setRunning] = useState(false);
   const [voice, setVoice] = useState<SpeechSynthesisVoice | null>(null);
   const [message, setMessage] = useState("ألصق رابط موقعك واضغط إنشاء الفيديو.");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [downloadName, setDownloadName] = useState("video.mp4");
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
@@ -96,39 +97,43 @@ function StudioPage() {
     setRunning(true);
     setScenes([]);
     setActiveIdx(0);
+    setPreviewUrl(null);
     setMessage("بدأ العمل على فيديو تعريفي لموقعك…");
     try {
-      // Stage 1: capture real screenshots of the website
       setStage("capture"); setProgress(5);
-      setMessage("جاري التقاط صور حقيقية من موقعك…");
-      const shotsRes = await capture({ data: { url, count: 5 } }).catch(() => ({ shots: [] as string[], pages: [] as string[] }));
-      setProgress(30);
+      setMessage("جاري التقاط صور حقيقية واستخراج هوية الموقع عبر Firecrawl…");
+      const shotsRes = await capture({ data: { url, count: 5 } }).catch(() => ({
+        shots: [] as string[], pages: [] as string[], branding: {} as Branding, content: "", title: "",
+      }));
+      setProgress(35);
 
-      // Stage 2: script
       setStage("script");
       setMessage("جاري كتابة سكربت الفيديو…");
       const result: ScriptResult = await genScript({ data: { url, language: "ar" } });
+      const siteTitle = shotsRes.title || result.title || hostFrom(url);
       const list: SceneState[] = result.scenes.map((s, i) => ({
         ...s,
-        imageUrl: shotsRes.shots[i] || shotsRes.shots[0] || undefined,
+        imageUrl: shotsRes.shots[i] || shotsRes.shots.find(Boolean) || undefined,
       }));
       if (!list.length) throw new Error("لم أستطع تكوين مشاهد للفيديو من هذا الرابط.");
       setScenes(list);
       setActiveIdx(0);
-      setMessage(result.fallback ? "سكربت احتياطي (الذكاء الاصطناعي غير متاح حالياً) — مع صور حقيقية لموقعك." : "تمت كتابة السكربت ✓");
-      setProgress(60);
+      setMessage(result.fallback ? "سكربت احتياطي مع صور حقيقية لموقعك." : "تمت كتابة السكربت ✓");
+      setProgress(55);
 
-      // Stage 3: voice (preparing — actual TTS runs inside merge)
-      setStage("voice"); setProgress(65);
-      await new Promise((r) => setTimeout(r, 300));
-
-      // Stage 4: merge
       setStage("merge");
-      setMessage("يتم الآن تركيب المشاهد وتنزيل ملف الفيديو تلقائياً…");
-      await renderVideo(list, url, (p) => setProgress(65 + p * 0.35));
+      setMessage("جاري تركيب المشاهد بالموسيقى والهوية البصرية لموقعك…");
+      const branding = shotsRes.branding ?? {};
+      const logo = branding.logo ? await loadImg(branding.logo).catch(() => null) : null;
+      const blob = await renderVideo(list, url, siteTitle, branding, logo, (p) => setProgress(55 + p * 0.45));
+
+      const host = hostFrom(url);
+      const name = `${host.replace(/[^a-z0-9.-]+/gi, "_")}.mp4`;
+      setDownloadName(name);
+      setPreviewUrl(URL.createObjectURL(blob));
 
       setStage("done"); setProgress(100);
-      setMessage("تم إنشاء الملف وتنزيله. إذا لم يظهر، تحقق من مجلد التنزيلات في المتصفح.");
+      setMessage("الفيديو جاهز! شاهد المعاينة ثم اضغط تنزيل.");
       toast.success("تم إنشاء الفيديو 🎬");
     } catch (e: unknown) {
       const text = e instanceof Error ? e.message : "فشل الإنشاء";
@@ -140,7 +145,19 @@ function StudioPage() {
     }
   }
 
-  async function renderVideo(list: SceneState[], url: string, onProgress: (p: number) => void) {
+  function hostFrom(u: string) {
+    try { return new URL(u.startsWith("http") ? u : `https://${u}`).hostname.replace(/^www\./, ""); }
+    catch { return "موقعك"; }
+  }
+
+  async function renderVideo(
+    list: SceneState[],
+    url: string,
+    siteTitle: string,
+    branding: Branding,
+    logo: HTMLImageElement | null,
+    onProgress: (p: number) => void,
+  ): Promise<Blob> {
     const imgs: (HTMLImageElement | null)[] = [];
     for (const s of list) imgs.push(s.imageUrl ? await loadImg(s.imageUrl).catch(() => null) : null);
 
@@ -151,24 +168,20 @@ function StudioPage() {
     const fps = 30;
     const stream = canvas.captureStream(fps);
 
+    // silent audio track so MediaRecorder always has audio
     try {
       const ac = new AudioContext();
       const osc = ac.createOscillator();
       const gain = ac.createGain();
-      gain.gain.value = 0;
-      osc.connect(gain);
+      gain.gain.value = 0; osc.connect(gain);
       const dest = ac.createMediaStreamDestination();
-      gain.connect(dest);
-      osc.start();
+      gain.connect(dest); osc.start();
       dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
     } catch { /* ignore */ }
 
     const mimeCandidates = [
-      "video/mp4;codecs=avc1.42E01E",
-      "video/mp4",
-      "video/webm;codecs=vp9,opus",
-      "video/webm;codecs=vp8,opus",
-      "video/webm",
+      "video/mp4;codecs=avc1.42E01E", "video/mp4",
+      "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm",
     ];
     const mime = mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) ?? "video/webm";
     const chunks: Blob[] = [];
@@ -177,59 +190,186 @@ function StudioPage() {
     const done = new Promise<Blob>((resolve) => { rec.onstop = () => resolve(new Blob(chunks, { type: mime })); });
     rec.start(100);
 
-    const total = list.length;
-    const durations = list.map((s) => {
-      const words = s.narration.trim().split(/\s+/).length;
-      return Math.max(3.5, Math.min(9, words / 2.2));
-    });
+    const host = hostFrom(url);
+    const bgColor = branding.background || "#0a0a14";
+    const primary = branding.primary || "#a78bfa";
+    const accent = branding.accent || "#ec4899";
+    const textColor = branding.textPrimary || "#ffffff";
 
-    for (let i = 0; i < total; i++) {
+    // build full timeline: intro (3s) + scenes + outro (3.5s)
+    const sceneDurs = list.map((s) => {
+      const words = s.narration.trim().split(/\s+/).length;
+      return Math.max(3.5, Math.min(8.5, words / 2.2));
+    });
+    const introDur = 3, outroDur = 3.5;
+    const totalSec = introDur + sceneDurs.reduce((a, b) => a + b, 0) + outroDur;
+    let elapsed = 0;
+
+    const drawBg = (p: number) => {
+      const grad = ctx.createLinearGradient(0, 0, W, H);
+      grad.addColorStop(0, bgColor);
+      grad.addColorStop(1, shade(bgColor, -25));
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+      // accent blob
+      const r = 350 + Math.sin(p * Math.PI * 2) * 30;
+      const cg = ctx.createRadialGradient(W * (0.2 + p * 0.6), H * 0.3, 0, W * (0.2 + p * 0.6), H * 0.3, r);
+      cg.addColorStop(0, hexA(primary, 0.35));
+      cg.addColorStop(1, hexA(primary, 0));
+      ctx.fillStyle = cg; ctx.fillRect(0, 0, W, H);
+    };
+
+    const drawLogo = () => {
+      if (!logo) return;
+      const maxH = 56, ratio = logo.width / logo.height;
+      const lh = maxH, lw = lh * ratio;
+      ctx.globalAlpha = 0.95;
+      ctx.drawImage(logo, 40, 36, lw, lh);
+      ctx.globalAlpha = 1;
+    };
+
+    const drawProgress = (overall: number) => {
+      ctx.fillStyle = "rgba(255,255,255,0.12)"; ctx.fillRect(40, H - 14, W - 80, 4);
+      const pg = ctx.createLinearGradient(40, 0, W - 40, 0);
+      pg.addColorStop(0, primary); pg.addColorStop(1, accent);
+      ctx.fillStyle = pg; ctx.fillRect(40, H - 14, (W - 80) * overall, 4);
+    };
+
+    const fadeAlpha = (sceneProgress: number, dur: number) => {
+      const fadeIn = Math.min(1, (sceneProgress * dur) / 0.4);
+      const fadeOut = Math.min(1, ((1 - sceneProgress) * dur) / 0.4);
+      return Math.min(fadeIn, fadeOut);
+    };
+
+    // INTRO
+    {
+      const start = performance.now();
+      while (true) {
+        const t = (performance.now() - start) / 1000;
+        if (t >= introDur) break;
+        const p = t / introDur;
+        const fa = fadeAlpha(p, introDur);
+        drawBg(p);
+        drawLogo();
+
+        ctx.save();
+        ctx.globalAlpha = fa;
+        ctx.textAlign = "center";
+        ctx.direction = "rtl";
+        ctx.fillStyle = textColor;
+        ctx.font = "700 64px system-ui, sans-serif";
+        const title = truncate(siteTitle, 40);
+        const ty = H * 0.45 + (1 - fa) * 20;
+        ctx.fillText(title, W / 2, ty);
+
+        ctx.font = "500 28px system-ui, sans-serif";
+        ctx.fillStyle = hexA(textColor, 0.7);
+        ctx.fillText(host, W / 2, ty + 60);
+        ctx.restore();
+
+        drawProgress(elapsed / totalSec + t / totalSec);
+        onProgress((elapsed + t) / totalSec);
+        await new Promise((r) => setTimeout(r, 1000 / fps));
+      }
+      elapsed += introDur;
+    }
+
+    // SCENES
+    for (let i = 0; i < list.length; i++) {
       setActiveIdx(i);
-      // start narration in background
       void speak(list[i].narration);
-      const sceneDur = durations[i] * 1000;
-      const sceneStart = performance.now();
+      const dur = sceneDurs[i];
+      const start = performance.now();
       const img = imgs[i];
       const scene = list[i];
 
       while (true) {
-        const t = performance.now() - sceneStart;
-        if (t >= sceneDur) break;
-        const p = t / sceneDur;
+        const t = (performance.now() - start) / 1000;
+        if (t >= dur) break;
+        const p = t / dur;
+        const fa = fadeAlpha(p, dur);
 
-        ctx.fillStyle = "#0a0a14"; ctx.fillRect(0, 0, W, H);
+        // bg fallback
+        drawBg(p);
+
+        // image with ken-burns
         if (img) {
-          const zoom = 1.0 + 0.12 * p;
-          const scale = Math.max(W / img.width, H / img.height) * zoom;
+          ctx.save();
+          ctx.globalAlpha = fa;
+          const zoom = 1.0 + 0.10 * p;
+          const scale = Math.max(W / img.width, (H * 0.85) / img.height) * zoom;
           const dw = img.width * scale, dh = img.height * scale;
-          const dx = (W - dw) / 2 + (p - 0.5) * 40;
-          const dy = (H - dh) / 2 + (p - 0.5) * 20;
+          const dx = (W - dw) / 2 + (p - 0.5) * 30;
+          const dy = (H * 0.45 - dh / 2) + (p - 0.5) * 15;
+          // image card
+          ctx.fillStyle = "rgba(0,0,0,0.4)";
+          ctx.fillRect(0, 0, W, H * 0.78);
+          ctx.beginPath();
+          ctx.rect(60, 60, W - 120, H * 0.6);
+          ctx.clip();
           ctx.drawImage(img, dx, dy, dw, dh);
-        } else {
-          const grad = ctx.createLinearGradient(0, 0, W, H);
-          grad.addColorStop(0, "#1a103d"); grad.addColorStop(1, "#0a0a14");
-          ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+          ctx.restore();
         }
 
-        const og = ctx.createLinearGradient(0, H * 0.45, 0, H);
-        og.addColorStop(0, "rgba(0,0,0,0)");
-        og.addColorStop(1, "rgba(0,0,0,0.85)");
-        ctx.fillStyle = og; ctx.fillRect(0, H * 0.45, W, H * 0.55);
+        drawLogo();
 
-        ctx.fillStyle = "#fff";
-        ctx.font = "500 30px 'Tajawal', system-ui, sans-serif";
+        // caption strip
+        ctx.save();
+        ctx.globalAlpha = fa;
+        const stripY = H * 0.78;
+        const sg = ctx.createLinearGradient(0, stripY - 30, 0, H);
+        sg.addColorStop(0, "rgba(0,0,0,0)");
+        sg.addColorStop(0.3, hexA(bgColor, 0.95));
+        sg.addColorStop(1, hexA(bgColor, 1));
+        ctx.fillStyle = sg; ctx.fillRect(0, stripY - 30, W, H - stripY + 30);
+
+        ctx.fillStyle = textColor;
+        ctx.font = "600 28px system-ui, sans-serif";
         ctx.textAlign = "right";
         ctx.direction = "rtl";
-        const lines = wrapText(ctx, scene.narration, W - 80);
-        const lineH = 42;
-        const baseY = H - 60 - (lines.length - 1) * lineH;
-        for (let li = 0; li < lines.length; li++) ctx.fillText(lines[li], W - 40, baseY + li * lineH);
+        const lines = wrapText(ctx, scene.narration, W - 100);
+        const lineH = 40;
+        const captionBaseY = stripY + 25;
+        for (let li = 0; li < Math.min(lines.length, 3); li++) {
+          ctx.fillText(lines[li], W - 50, captionBaseY + li * lineH);
+        }
+        ctx.restore();
 
-        const overall = (i + p) / total;
-        ctx.fillStyle = "rgba(255,255,255,0.15)"; ctx.fillRect(40, H - 14, W - 80, 4);
-        ctx.fillStyle = "#a78bfa"; ctx.fillRect(40, H - 14, (W - 80) * overall, 4);
+        drawProgress((elapsed + t) / totalSec);
+        onProgress((elapsed + t) / totalSec);
+        await new Promise((r) => setTimeout(r, 1000 / fps));
+      }
+      elapsed += dur;
+    }
 
-        onProgress(overall);
+    // OUTRO
+    {
+      const start = performance.now();
+      while (true) {
+        const t = (performance.now() - start) / 1000;
+        if (t >= outroDur) break;
+        const p = t / outroDur;
+        const fa = fadeAlpha(p, outroDur);
+
+        drawBg(p);
+        drawLogo();
+
+        ctx.save();
+        ctx.globalAlpha = fa;
+        ctx.textAlign = "center";
+        ctx.direction = "rtl";
+        ctx.fillStyle = textColor;
+        ctx.font = "600 36px system-ui, sans-serif";
+        ctx.fillText("زر الموقع الآن", W / 2, H * 0.42);
+
+        ctx.font = "700 56px system-ui, sans-serif";
+        const pg = ctx.createLinearGradient(W * 0.3, 0, W * 0.7, 0);
+        pg.addColorStop(0, primary); pg.addColorStop(1, accent);
+        ctx.fillStyle = pg;
+        ctx.fillText(host, W / 2, H * 0.42 + 80);
+        ctx.restore();
+
+        drawProgress((elapsed + t) / totalSec);
+        onProgress((elapsed + t) / totalSec);
         await new Promise((r) => setTimeout(r, 1000 / fps));
       }
     }
@@ -237,46 +377,37 @@ function StudioPage() {
     rec.stop();
     const blob = await done;
     const isMp4 = mime.startsWith("video/mp4");
+    if (isMp4) return blob;
 
-    let safeName = "video";
+    toast.info("جاري التحويل إلى MP4…");
     try {
-      const h = new URL(url.startsWith("http") ? url : `https://${url}`).hostname.replace(/^www\./, "");
-      if (h) safeName = h.replace(/[^a-z0-9.-]+/gi, "_");
-    } catch { /* ignore */ }
-
-    let finalBlob = blob;
-    let ext = isMp4 ? "mp4" : "webm";
-
-    if (!isMp4) {
-      toast.info("جاري التحويل إلى MP4…");
-      try {
-        const { FFmpeg } = await import("@ffmpeg/ffmpeg");
-        const { fetchFile, toBlobURL } = await import("@ffmpeg/util");
-        const ffmpeg = new FFmpeg();
-        const base = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd";
-        await ffmpeg.load({
-          coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript"),
-          wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm"),
-        });
-        await ffmpeg.writeFile("in.webm", await fetchFile(blob));
-        await ffmpeg.exec([
-          "-i", "in.webm", "-c:v", "libx264", "-preset", "veryfast",
-          "-crf", "23", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "out.mp4",
-        ]);
-        const data = await ffmpeg.readFile("out.mp4");
-        const u8 = data as Uint8Array;
-        finalBlob = new Blob([u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer], { type: "video/mp4" });
-        ext = "mp4";
-      } catch (err) {
-        console.error("ffmpeg convert failed", err);
-        toast.error("تعذّر التحويل إلى MP4 — سيتم تنزيل WebM");
-      }
+      const { FFmpeg } = await import("@ffmpeg/ffmpeg");
+      const { fetchFile, toBlobURL } = await import("@ffmpeg/util");
+      const ffmpeg = new FFmpeg();
+      const base = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd";
+      await ffmpeg.load({
+        coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript"),
+        wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm"),
+      });
+      await ffmpeg.writeFile("in.webm", await fetchFile(blob));
+      await ffmpeg.exec([
+        "-i", "in.webm", "-c:v", "libx264", "-preset", "veryfast",
+        "-crf", "23", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "out.mp4",
+      ]);
+      const data = await ffmpeg.readFile("out.mp4");
+      const u8 = data as Uint8Array;
+      return new Blob([u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer], { type: "video/mp4" });
+    } catch (err) {
+      console.error("ffmpeg convert failed", err);
+      toast.error("تعذّر التحويل — سيتم تنزيل WebM");
+      return blob;
     }
+  }
 
+  function downloadPreview() {
+    if (!previewUrl) return;
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(finalBlob);
-    a.download = `${safeName}.${ext}`;
-    a.click();
+    a.href = previewUrl; a.download = downloadName; a.click();
   }
 
   const active = scenes[activeIdx];
@@ -316,21 +447,22 @@ function StudioPage() {
       <section className="container mx-auto px-6 mt-6 pb-12">
         <div className="glass-panel overflow-hidden">
           <div className="aspect-video bg-black relative">
-            {active?.imageUrl ? (
+            {previewUrl ? (
+              <video src={previewUrl} controls className="w-full h-full" />
+            ) : active?.imageUrl ? (
               <img src={active.imageUrl} alt="" className="w-full h-full object-cover" />
             ) : (
               <div className="absolute inset-0 grid place-items-center text-muted-foreground/70 text-sm bg-gradient-hero/10">
                 {running ? <Loader2 className="size-10 animate-spin" /> : <span className="inline-flex items-center gap-2"><Wand2 className="size-5" /> ألصق رابط موقعك واضغط "إنشاء الفيديو"</span>}
               </div>
             )}
-            {active && (
+            {active && !previewUrl && (
               <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
                 <p className="text-sm leading-relaxed">{active.narration}</p>
               </div>
             )}
           </div>
 
-          {/* Progress */}
           <div className="p-4 border-t border-border space-y-2">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>{STAGE_LABEL[stage]}</span>
@@ -340,9 +472,45 @@ function StudioPage() {
               <div className="h-full bg-gradient-hero transition-[width] duration-300" style={{ width: `${progress}%` }} />
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed text-right">{message}</p>
+
+            {previewUrl && (
+              <div className="flex flex-wrap gap-2 pt-2">
+                <button onClick={downloadPreview} className="rounded-lg bg-gradient-hero px-4 py-2 font-semibold text-primary-foreground inline-flex items-center gap-2">
+                  <Download className="size-4" /> تنزيل {downloadName}
+                </button>
+                <button onClick={() => runPipeline(input)} disabled={running} className="rounded-lg border border-border px-4 py-2 inline-flex items-center gap-2 hover:bg-muted/30">
+                  <RefreshCw className="size-4" /> إعادة الإنشاء
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </section>
     </main>
   );
+}
+
+// ----- helpers -----
+function truncate(s: string, n: number) { return s.length > n ? s.slice(0, n - 1) + "…" : s; }
+
+function hexA(hex: string, a: number) {
+  const h = hex.replace("#", "");
+  const v = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  const r = parseInt(v.slice(0, 2), 16) || 0;
+  const g = parseInt(v.slice(2, 4), 16) || 0;
+  const b = parseInt(v.slice(4, 6), 16) || 0;
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function shade(hex: string, percent: number) {
+  const h = hex.replace("#", "");
+  const v = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  let r = parseInt(v.slice(0, 2), 16) || 0;
+  let g = parseInt(v.slice(2, 4), 16) || 0;
+  let b = parseInt(v.slice(4, 6), 16) || 0;
+  const t = percent < 0 ? 0 : 255, p = Math.abs(percent) / 100;
+  r = Math.round((t - r) * p + r);
+  g = Math.round((t - g) * p + g);
+  b = Math.round((t - b) * p + b);
+  return `rgb(${r},${g},${b})`;
 }
