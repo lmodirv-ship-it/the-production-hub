@@ -234,7 +234,7 @@ export const captureScreenshots = createServerFn({ method: "POST" })
           };
         };
         const d = j.data ?? {};
-        shots.push(d.screenshot ?? "");
+        shots.push(await urlToDataUrl(d.screenshot ?? ""));
         if (isFirst) {
           content = (d.markdown ?? "").slice(0, 4000);
           title = d.metadata?.title ?? title;
