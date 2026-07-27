@@ -69,22 +69,26 @@ export function saveStops(url: string, stops: TourStop[]) {
 
 /**
  * Animate a value from 0 to `distance` over `durationMs`.
- * Returns a cancel function; resolves when finished or cancelled.
+ * Returns a cancel function and pause/resume controls; resolves when finished or cancelled.
  */
 export function animateScroll(
   distance: number,
   durationMs: number,
   onFrame: (offset: number) => void,
-): { done: Promise<void>; cancel: () => void } {
+): { done: Promise<void>; cancel: () => void; pause: () => void; resume: () => void } {
   let raf = 0;
   let cancelled = false;
+  let paused = false;
+  let elapsedBeforePause = 0;
   let resolveDone: () => void = () => {};
   const done = new Promise<void>((r) => (resolveDone = r));
-  const start = performance.now();
+  let start = performance.now();
 
   const step = (now: number) => {
     if (cancelled) return resolveDone();
-    const t = Math.min(1, (now - start) / Math.max(1, durationMs));
+    if (paused) return;
+    const elapsed = now - start + elapsedBeforePause;
+    const t = Math.min(1, elapsed / Math.max(1, durationMs));
     onFrame(easeInOutSine(t) * distance);
     if (t < 1) raf = requestAnimationFrame(step);
     else resolveDone();
@@ -98,19 +102,32 @@ export function animateScroll(
       cancelAnimationFrame(raf);
       resolveDone();
     },
+    pause: () => {
+      if (paused || cancelled) return;
+      paused = true;
+      elapsedBeforePause = Math.max(0, performance.now() - start);
+      cancelAnimationFrame(raf);
+    },
+    resume: () => {
+      if (!paused || cancelled) return;
+      paused = false;
+      start = performance.now() - elapsedBeforePause;
+      raf = requestAnimationFrame(step);
+    },
   };
 }
 
 /**
  * Cinematic scroll: splits the travel into segments with a short hold at the
  * end of each one, so the camera "reads" the page instead of sliding past it.
+ * Supports pause/resume.
  */
 export function animateScrollCinematic(
   distance: number,
   durationMs: number,
   segments: number,
   onFrame: (offset: number) => void,
-): { done: Promise<void>; cancel: () => void } {
+): { done: Promise<void>; cancel: () => void; pause: () => void; resume: () => void } {
   const n = Math.max(1, Math.round(segments));
   const holdMs = 550;
   const moveTotal = Math.max(600, durationMs - holdMs * (n - 1));
@@ -119,14 +136,17 @@ export function animateScrollCinematic(
 
   let raf = 0;
   let cancelled = false;
+  let paused = false;
+  let elapsedBeforePause = 0;
   let resolveDone: () => void = () => {};
   const done = new Promise<void>((r) => (resolveDone = r));
-  const start = performance.now();
+  let start = performance.now();
   const total = moveTotal + holdMs * (n - 1);
 
   const step = (now: number) => {
     if (cancelled) return resolveDone();
-    const elapsed = now - start;
+    if (paused) return;
+    const elapsed = now - start + elapsedBeforePause;
     const t = Math.min(1, elapsed / Math.max(1, total));
     const idx = Math.min(n - 1, Math.floor(elapsed / cycle));
     const inSeg = Math.min(moveEach, elapsed - idx * cycle);
@@ -148,8 +168,83 @@ export function animateScrollCinematic(
       cancelAnimationFrame(raf);
       resolveDone();
     },
+    pause: () => {
+      if (paused || cancelled) return;
+      paused = true;
+      elapsedBeforePause = Math.max(0, performance.now() - start);
+      cancelAnimationFrame(raf);
+    },
+    resume: () => {
+      if (!paused || cancelled) return;
+      paused = false;
+      start = performance.now() - elapsedBeforePause;
+      raf = requestAnimationFrame(step);
+    },
   };
 }
+
+/**
+ * For a single-page site, do a multi-pass cinematic scroll:
+ * down to 25%, back up, down to 55%, back up, down to bottom.
+ * This turns a short page into a long, visually interesting tour.
+ */
+export function runSinglePageScroll(
+  totalHeight: number,
+  viewHeight: number,
+  totalSeconds: number,
+  setOffset: (n: number) => void,
+): { done: Promise<void>; cancel: () => void; pause: () => void; resume: () => void } {
+  const max = Math.max(0, totalHeight - viewHeight);
+  const passes = [
+    { from: 0, to: 0.25 },
+    { from: 0.25, to: 0 },
+    { from: 0, to: 0.55 },
+    { from: 0.55, to: 0 },
+    { from: 0, to: 0.85 },
+    { from: 0.85, to: 0 },
+    { from: 0, to: 1 },
+  ];
+  const gap = 0.4; // seconds between passes
+  const segTime = Math.max(1800, (totalSeconds * 1000 - gap * (passes.length - 1) * 1000) / passes.length);
+
+  let active: { done: Promise<void>; cancel: () => void; pause: () => void; resume: () => void } | null = null;
+  let cancelled = false;
+  let paused = false;
+
+  const done = (async () => {
+    for (let i = 0; i < passes.length; i++) {
+      if (cancelled) return;
+      const p = passes[i];
+      const from = Math.round(p.from * max);
+      const to = Math.round(p.to * max);
+      setOffset(from);
+      active = animateScrollCinematic(to - from, segTime, 1, (d) => setOffset(from + d));
+      await active.done;
+      if (cancelled) return;
+      if (i < passes.length - 1) {
+        await sleep(gap * 1000);
+        if (cancelled) return;
+      }
+    }
+  })();
+
+  return {
+    done,
+    cancel: () => {
+      cancelled = true;
+      active?.cancel();
+    },
+    pause: () => {
+      paused = true;
+      active?.pause();
+    },
+    resume: () => {
+      paused = false;
+      active?.resume();
+    },
+  };
+}
+
 
 export function totalDuration(stops: TourStop[]) {
   return stops.filter((s) => s.enabled).reduce((a, s) => a + s.seconds, 0);

@@ -125,11 +125,17 @@ export async function saveFile(
     typeof data === "string" ? new Blob([data], { type: "text/plain;charset=utf-8" }) : data;
   if (dirHandle) {
     try {
-      const fh = await dirHandle.getFileHandle(filename, { create: true });
-      const w = await fh.createWritable();
-      await w.write(blob);
-      await w.close();
-      return "folder";
+      if (await ensurePermission(dirHandle)) {
+        const fh = await dirHandle.getFileHandle(filename, { create: true });
+        const w = await fh.createWritable();
+        await w.write(blob);
+        await w.close();
+        return "folder";
+      }
+      // permission lost — clear so future saves fall back to download
+      dirHandle = null;
+      dirName = "";
+      void persist(null);
     } catch (e) {
       console.error("folder write failed", e);
     }
@@ -137,3 +143,4 @@ export async function saveFile(
   browserDownload(blob, filename);
   return "download";
 }
+

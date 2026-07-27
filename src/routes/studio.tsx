@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useSearch } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import {
@@ -10,11 +10,14 @@ import {
   FolderOpen,
   FileText,
   Play,
+  Pause,
+  SkipForward,
   CheckCircle2,
   XCircle,
   Clock,
   Search,
   Volume2,
+  Mic,
 } from "lucide-react";
 import { SITES } from "@/data/sites";
 import { discoverPages } from "@/lib/pages.functions";
@@ -29,6 +32,7 @@ import {
   fmt,
   normalizeUrl,
   originOf,
+  runSinglePageScroll,
   sleep,
   type QualityKey,
   type TourStop,
@@ -74,9 +78,6 @@ export const Route = createFileRoute("/studio")({
   component: StudioPage,
 });
 
-const BASE_W = 1280;
-const BASE_H = 720;
-
 const VOICES = [
   { id: "alloy", label: "هادئ" },
   { id: "verse", label: "حيوي" },
@@ -90,7 +91,36 @@ const DURATIONS = [
   { s: 300, label: "٥ دقائق" },
 ];
 
-type QueueStatus = "pending" | "running" | "done" | "failed";
+const INTRO_MS = 3500;
+const OUTRO_MS = 3500;
+
+const STORAGE_KEYS = {
+  selected: "eco-selected",
+  extra: "eco-extra",
+  quality: "eco-quality",
+  voice: "eco-voice",
+  target: "eco-target",
+  mic: "eco-mic",
+};
+
+function loadJSON<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveJSON<T>(key: string, value: T) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* ignore */
+  }
+}
+
+type QueueStatus = "pending" | "running" | "done" | "failed" | "skipped";
 type QueueItem = {
   url: string;
   name: string;
@@ -99,6 +129,7 @@ type QueueItem = {
   note?: string;
 };
 type Clip = { url: string; seconds: number };
+type RecordResult = { where: "folder" | "download"; audioFailed: boolean };
 
 function StudioPage() {
   const sp = useSearch({ from: "/studio" });
@@ -110,14 +141,17 @@ function StudioPage() {
   const [extra, setExtra] = useState("");
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [current, setCurrent] = useState(-1);
+  const [retryItems, setRetryItems] = useState<QueueItem[]>([]);
 
   const [quality, setQuality] = useState<QualityKey>("fhd");
   const [voice, setVoice] = useState("alloy");
   const [target, setTarget] = useState(MIN_VIDEO_SECONDS);
   const [depth] = useState(3);
   const [folder, setFolder] = useState("");
+  const [mic, setMic] = useState(false);
 
   const [running, setRunning] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [textOnly, setTextOnly] = useState(false);
   const [message, setMessage] = useState("اختر مواقعك من القائمة ثم اضغط «ابدأ التسجيل المتواصل».");
   const [seconds, setSeconds] = useState(0);
@@ -139,26 +173,60 @@ function StudioPage() {
   const narrationTracksRef = useRef<MediaStreamTrack[]>([]);
   const clipsRef = useRef<Record<string, Clip>>({});
   const timerRef = useRef<number | null>(null);
+  const secondsRef = useRef(0);
   const captionTimersRef = useRef<number[]>([]);
-  const cancelScrollRef = useRef<() => void>(() => {});
+  const cancelScrollRef = useRef<{
+    cancel: () => void;
+    pause: () => void;
+    resume: () => void;
+  }>({ cancel: () => {}, pause: () => {}, resume: () => {} });
   const abortRef = useRef(false);
+  const skipRef = useRef(false);
+  const pausedRef = useRef(false);
   const compositorRef = useRef<ReturnType<typeof startCompositor> | null>(null);
+  const recRef = useRef<MediaRecorder | null>(null);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const captionsRef = useRef<TimedCaption[]>([]);
+  const currentPageTextRef = useRef("");
+  const currentPageEndRef = useRef(0);
 
-  const tall = BASE_H * depth;
+  const q = useMemo(() => QUALITY[quality], [quality]);
+  const tall = q.height * depth;
+
+  /* ---------------- persistence ---------------- */
+
+  useEffect(() => {
+    setSelected(loadJSON<Record<string, boolean>>(STORAGE_KEYS.selected, sp.url ? { [sp.url]: true } : {}));
+    setExtra(loadJSON<string>(STORAGE_KEYS.extra, ""));
+    setQuality(loadJSON<QualityKey>(STORAGE_KEYS.quality, "fhd"));
+    setVoice(loadJSON<string>(STORAGE_KEYS.voice, "alloy"));
+    setTarget(loadJSON<number>(STORAGE_KEYS.target, MIN_VIDEO_SECONDS));
+    setMic(loadJSON<boolean>(STORAGE_KEYS.mic, false));
+    if (supportsFolderSave()) {
+      void restoreFolder().then((n) => n && setFolder(n));
+    }
+  }, []);
+
+  useEffect(() => saveJSON(STORAGE_KEYS.selected, selected), [selected]);
+  useEffect(() => saveJSON(STORAGE_KEYS.extra, extra), [extra]);
+  useEffect(() => saveJSON(STORAGE_KEYS.quality, quality), [quality]);
+  useEffect(() => saveJSON(STORAGE_KEYS.voice, voice), [voice]);
+  useEffect(() => saveJSON(STORAGE_KEYS.target, target), [target]);
+  useEffect(() => saveJSON(STORAGE_KEYS.mic, mic), [mic]);
 
   useEffect(() => {
     const el = shellRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setScale(el.clientWidth / BASE_W));
+    const ro = new ResizeObserver(() => setScale(el.clientWidth / q.width));
     ro.observe(el);
-    setScale(el.clientWidth / BASE_W);
+    setScale(el.clientWidth / q.width);
     return () => ro.disconnect();
-  }, []);
+  }, [q.width]);
 
   useEffect(() => {
-    if (supportsFolderSave()) void restoreFolder().then((n) => n && setFolder(n));
     return () => {
       displayRef.current?.getTracks().forEach((t) => t.stop());
+      micStreamRef.current?.getTracks().forEach((t) => t.stop());
       if (timerRef.current) window.clearInterval(timerRef.current);
       Object.values(clipsRef.current).forEach((c) => URL.revokeObjectURL(c.url));
       void audioCtxRef.current?.close().catch(() => {});
@@ -167,10 +235,26 @@ function StudioPage() {
 
   /* ---------------- selection ---------------- */
 
-  const list = SITES.filter(
-    (s) => !filter.trim() || (s.name + s.description).includes(filter.trim()),
+  const list = useMemo(
+    () => SITES.filter((s) => !filter.trim() || (s.name + s.description).includes(filter.trim())),
+    [filter],
   );
-  const selectedCount = Object.values(selected).filter(Boolean).length;
+  const selectedCount = useMemo(() => Object.values(selected).filter(Boolean).length, [selected]);
+
+  const extraSites = useMemo(() => {
+    return extra
+      .split(/[\n,]/)
+      .map((v) => normalizeUrl(v.trim()))
+      .filter(Boolean)
+      .filter((u) => !SITES.some((s) => s.url === u));
+  }, [extra]);
+
+  const totalEstimate = useMemo(() => {
+    const count = selectedCount + extraSites.length;
+    const sec = count * (target + 7);
+    const bytes = sec * (q.videoBps + 192_000) / 8;
+    return { count, sec, mb: Math.round(bytes / 1024 / 1024) };
+  }, [selectedCount, extraSites.length, target, q.videoBps]);
 
   function buildQueue(): QueueItem[] {
     const picked = SITES.filter((s) => selected[s.url]).map((s) => ({
@@ -179,17 +263,12 @@ function StudioPage() {
       description: s.description,
       status: "pending" as QueueStatus,
     }));
-    const manual = extra
-      .split(/[\n,]/)
-      .map((v) => normalizeUrl(v.trim()))
-      .filter(Boolean)
-      .filter((u) => !picked.some((p) => p.url === u))
-      .map((u) => ({
-        url: u,
-        name: safeFileBase(u),
-        description: "",
-        status: "pending" as QueueStatus,
-      }));
+    const manual = extraSites.map((u) => ({
+      url: u,
+      name: safeFileBase(u),
+      description: "",
+      status: "pending" as QueueStatus,
+    }));
     return [...picked, ...manual];
   }
 
@@ -215,32 +294,45 @@ function StudioPage() {
       },
     });
 
+    if (narration.fallback) {
+      toast.info(`استُخدم سكربت احتياطي لـ ${item.name} بدون ذكاء اصطناعي.`);
+    }
+
     Object.values(clipsRef.current).forEach((c) => URL.revokeObjectURL(c.url));
     clipsRef.current = {};
 
     const stops: TourStop[] = [];
+    let audioFailed = !mic;
     for (let i = 0; i < narration.items.length; i++) {
-      if (abortRef.current) break;
+      if (abortRef.current || skipRef.current) break;
       const it = narration.items[i];
       setMessage(`توليد الصوت ${i + 1}/${narration.items.length} — ${item.name}`);
       let secs = Math.max(12, Math.ceil(it.text.length / 14));
-      try {
-        const { audio, mime } = await synthesizeSpeech({
-          data: { text: it.text.slice(0, 1900), voice },
-        });
-        const url = base64ToBlobUrl(audio, mime);
-        const dur = await audioDuration(url);
-        if (dur > 0) {
-          clipsRef.current[it.path] = { url, seconds: dur };
-          secs = Math.ceil(dur) + 3;
+
+      if (mic) {
+        // microphone will supply the narration
+        clipsRef.current[it.path] = { url: "", seconds: 0 };
+      } else {
+        try {
+          const { audio, mime } = await synthesizeSpeech({
+            data: { text: it.text.slice(0, 1900), voice },
+          });
+          const url = base64ToBlobUrl(audio, mime);
+          const dur = await audioDuration(url);
+          if (dur > 0) {
+            clipsRef.current[it.path] = { url, seconds: dur };
+            secs = Math.ceil(dur) + 3;
+            audioFailed = false;
+          }
+        } catch (e) {
+          console.error(e);
+          audioFailed = true;
         }
-      } catch (e) {
-        console.error(e);
       }
       stops.push({ path: it.path, seconds: secs, enabled: true });
     }
 
-    return { stops: ensureTotalSeconds(stops, target), scripts: narration.items };
+    return { stops: ensureTotalSeconds(stops, target), scripts: narration.items, audioFailed };
   }
 
   function clearCaptionTimers() {
@@ -275,7 +367,7 @@ function StudioPage() {
   function playClip(path: string) {
     const clip = clipsRef.current[path];
     const el = narrationElRef.current;
-    if (!clip || !el) return;
+    if (!clip || !clip.url || !el) return;
     el.src = clip.url;
     el.currentTime = 0;
     void el.play().catch(() => {});
@@ -297,6 +389,44 @@ function StudioPage() {
       console.error("audio mix failed", e);
     }
     return narrationTracksRef.current;
+  }
+
+  async function startMic() {
+    if (!mic) return null;
+    if (micStreamRef.current) return micStreamRef.current;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micStreamRef.current = stream;
+      return stream;
+    } catch (e) {
+      console.error(e);
+      toast.error("لم يُسمح بالميكروفون — سيتم التسجيل بدون صوتك.");
+      setMic(false);
+      return null;
+    }
+  }
+
+  /* ---------------- pausable sleep ---------------- */
+
+  async function pauseAwareSleep(ms: number) {
+    const start = performance.now();
+    let pausedTime = 0;
+    let pausedAt = 0;
+    while (true) {
+      if (abortRef.current || skipRef.current) return;
+      if (pausedRef.current) {
+        if (!pausedAt) pausedAt = performance.now();
+        await sleep(100);
+        continue;
+      }
+      if (pausedAt) {
+        pausedTime += performance.now() - pausedAt;
+        pausedAt = 0;
+      }
+      const elapsed = performance.now() - start - pausedTime;
+      if (elapsed >= ms) return;
+      await sleep(Math.min(100, ms - elapsed));
+    }
   }
 
   /* ---------------- mp4 ---------------- */
@@ -354,13 +484,16 @@ function StudioPage() {
   ) {
     const origin = originOf(item.url);
     const captions: TimedCaption[] = [];
+    captionsRef.current = captions;
     let elapsed = 0;
+    const singlePage = stops.length === 1;
 
     for (let i = 0; i < stops.length; i++) {
-      if (abortRef.current) break;
+      if (abortRef.current || skipRef.current) break;
       const stop = stops[i];
       setStageLabel(`${item.name} · ${i + 1}/${stops.length}`);
       compositorRef.current?.setBadge(`${item.name} — ${stop.path}`);
+      currentPageTextRef.current = scripts.find((s) => s.path === stop.path)?.text ?? "";
       setFade(true);
       setOffset(0);
       setFrameSrc(`${origin}${stop.path}`);
@@ -374,26 +507,35 @@ function StudioPage() {
           };
           el.addEventListener("load", on);
         }),
-        sleep(7000),
+        pauseAwareSleep(7000),
       ]);
-      if (abortRef.current) break;
+      if (abortRef.current || skipRef.current) break;
       setFade(false);
-      await sleep(500);
+      await pauseAwareSleep(500);
+      if (abortRef.current || skipRef.current) break;
 
-      const text = scripts.find((s) => s.path === stop.path)?.text ?? "";
+      currentPageEndRef.current = secondsRef.current + stop.seconds;
       playClip(stop.path);
-      if (text) scheduleCaptions(text, stop.seconds, elapsed, captions);
+      if (currentPageTextRef.current) {
+        scheduleCaptions(currentPageTextRef.current, stop.seconds, elapsed, captions);
+      }
 
-      const scrollMs = Math.max(2500, stop.seconds * 1000 - 2200);
-      const segments = Math.max(3, Math.round(stop.seconds / 7));
-      const anim = animateScrollCinematic(tall - BASE_H, scrollMs, segments, setOffset);
-      cancelScrollRef.current = anim.cancel;
-      await anim.done;
-      if (abortRef.current) break;
-      await sleep(900);
+      if (singlePage) {
+        const anim = runSinglePageScroll(tall, q.height, stop.seconds, setOffset);
+        cancelScrollRef.current = anim;
+        await anim.done;
+      } else {
+        const scrollMs = Math.max(2500, stop.seconds * 1000 - 2200);
+        const segments = Math.max(3, Math.round(stop.seconds / 7));
+        const anim = animateScrollCinematic(tall - q.height, scrollMs, segments, setOffset);
+        cancelScrollRef.current = anim;
+        await anim.done;
+      }
+      if (abortRef.current || skipRef.current) break;
+      await pauseAwareSleep(900);
       elapsed += stop.seconds;
       setFade(true);
-      await sleep(400);
+      await pauseAwareSleep(400);
     }
     clearCaptionTimers();
     compositorRef.current?.setCaption("");
@@ -403,11 +545,10 @@ function StudioPage() {
 
   /* ---------------- one site ---------------- */
 
-  async function recordOne(item: QueueItem) {
-    const { stops, scripts } = await planSite(item);
-    if (abortRef.current) throw new Error("aborted");
+  async function recordOne(item: QueueItem): Promise<RecordResult> {
+    const { stops, scripts, audioFailed: ttsFailed } = await planSite(item);
+    if (abortRef.current || skipRef.current) throw new Error("skip");
 
-    const q = QUALITY[quality];
     const comp = startCompositor(displayRef.current!, q.width, q.height, q.fps);
     compositorRef.current = comp;
 
@@ -415,6 +556,9 @@ function StudioPage() {
       ...comp.stream.getVideoTracks(),
       ...ensureNarrationTracks(),
     ];
+    if (micStreamRef.current) {
+      tracks.push(...micStreamRef.current.getAudioTracks());
+    }
     const candidates = [
       "video/mp4;codecs=avc1,mp4a.40.2",
       "video/mp4",
@@ -428,6 +572,7 @@ function StudioPage() {
       videoBitsPerSecond: q.videoBps,
       audioBitsPerSecond: 192_000,
     });
+    recRef.current = rec;
     const chunks: Blob[] = [];
     rec.ondataavailable = (e) => {
       if (e.data.size) chunks.push(e.data);
@@ -436,17 +581,28 @@ function StudioPage() {
       rec.onstop = () => r();
     });
 
+    rec.start(1000);
+    comp.setCard({ title: item.name, subtitle: item.url, kind: "intro" });
+    await pauseAwareSleep(INTRO_MS);
+    comp.setCard(null);
+
     setSeconds(0);
     if (timerRef.current) window.clearInterval(timerRef.current);
-    timerRef.current = window.setInterval(() => setSeconds((s) => s + 1), 1000);
+    secondsRef.current = 0;
+    timerRef.current = window.setInterval(() => {
+      secondsRef.current += 1;
+      setSeconds((s) => s + 1);
+    }, 1000);
     setMessage(`جارٍ تصوير ${item.name} — لا تلمس شيئاً.`);
-    rec.start(1000);
 
     let captions: TimedCaption[] = [];
     try {
       captions = await runTour(item, stops, scripts);
     } finally {
-      await sleep(600);
+      comp.setCard({ title: item.name, subtitle: item.url, kind: "outro" });
+      await pauseAwareSleep(OUTRO_MS);
+      comp.setCard(null);
+      await pauseAwareSleep(600);
       if (rec.state !== "inactive") rec.stop();
       await stopped;
       if (timerRef.current) {
@@ -458,12 +614,14 @@ function StudioPage() {
       narrationElRef.current?.pause();
     }
 
+    if (abortRef.current || skipRef.current) throw new Error("skip");
+
     const raw = new Blob(chunks, { type: mime.split(";")[0] || "video/webm" });
     const finalBlob = mime.startsWith("video/mp4") ? raw : await convertToMp4(raw);
     const base = safeFileBase(item.url);
     const ext = finalBlob.type === "video/mp4" ? "mp4" : "webm";
     const fullScript = scripts.map((s) => s.text).join("\n\n");
-    const total = stops.reduce((a, s) => a + s.seconds, 0);
+    const total = stops.reduce((a, s) => a + s.seconds, 0) + Math.round((INTRO_MS + OUTRO_MS) / 1000);
 
     setMessage(`حفظ ملفات ${item.name}…`);
     const where = await saveFile(finalBlob, `${base}.${ext}`);
@@ -472,13 +630,60 @@ function StudioPage() {
       `${base}.txt`,
     );
     if (captions.length) await saveFile(buildSrt(captions), `${base}.srt`);
-    return where;
+
+    return { where, audioFailed: ttsFailed || (mic && !micStreamRef.current) };
   }
 
   /* ---------------- queue ---------------- */
 
+  async function runQueue(items: QueueItem[]) {
+    setQueue(items);
+    abortRef.current = false;
+    skipRef.current = false;
+
+    for (let i = 0; i < items.length; i++) {
+      if (abortRef.current) break;
+      setCurrent(i);
+      setQueue((prev) => prev.map((p, j) => (j === i ? { ...p, status: "running" } : p)));
+      try {
+        const { where, audioFailed } = await recordOne(items[i]);
+        setQueue((prev) =>
+          prev.map((p, j) =>
+            j === i
+              ? {
+                  ...p,
+                  status: "done",
+                  note: audioFailed
+                    ? "تم الحفظ (بدون تعليق صوتي)"
+                    : where === "folder"
+                      ? "حُفظ في المجلد"
+                      : "نزل للتنزيلات",
+                }
+              : p,
+          ),
+        );
+        if (audioFailed) {
+          toast.warning(`تم تسجيل ${items[i].name} بدون تعليق صوتي.`);
+        }
+      } catch (e) {
+        if (skipRef.current) {
+          setQueue((prev) =>
+            prev.map((p, j) => (j === i ? { ...p, status: "skipped", note: "تم تخطّيه" } : p)),
+          );
+          skipRef.current = false;
+        } else {
+          console.error(e);
+          setQueue((prev) =>
+            prev.map((p, j) => (j === i ? { ...p, status: "failed", note: "تعذّر التسجيل" } : p)),
+          );
+        }
+      }
+      await pauseAwareSleep(800);
+    }
+  }
+
   async function startQueue() {
-    const items = buildQueue();
+    const items = retryItems.length ? retryItems : buildQueue();
     if (!items.length) {
       toast.error("اختر موقعاً واحداً على الأقل.");
       return;
@@ -488,12 +693,12 @@ function StudioPage() {
       return;
     }
 
-    setQueue(items);
-    abortRef.current = false;
+    setRetryItems([]);
     setRunning(true);
+    pausedRef.current = false;
+    setPaused(false);
     setMessage("اختر «هذا التبويب» في نافذة المشاركة — مرة واحدة فقط لكل المواقع.");
 
-    const q = QUALITY[quality];
     let display: MediaStream;
     try {
       display = await navigator.mediaDevices.getDisplayMedia({
@@ -530,6 +735,10 @@ function StudioPage() {
       abortRef.current = true;
     });
 
+    if (mic) {
+      await startMic();
+    }
+
     if (stageRef.current) {
       try {
         await stageRef.current.requestFullscreen();
@@ -539,49 +748,98 @@ function StudioPage() {
       await sleep(500);
     }
 
-    for (let i = 0; i < items.length; i++) {
-      if (abortRef.current) break;
-      setCurrent(i);
-      setQueue((prev) => prev.map((p, j) => (j === i ? { ...p, status: "running" } : p)));
-      try {
-        const where = await recordOne(items[i]);
-        setQueue((prev) =>
-          prev.map((p, j) =>
-            j === i
-              ? {
-                  ...p,
-                  status: "done",
-                  note: where === "folder" ? "حُفظ في المجلد" : "نزل للتنزيلات",
-                }
-              : p,
-          ),
-        );
-      } catch (e) {
-        console.error(e);
-        setQueue((prev) =>
-          prev.map((p, j) => (j === i ? { ...p, status: "failed", note: "تعذّر التسجيل" } : p)),
-        );
-      }
-      await sleep(800);
-    }
+    await runQueue(items);
 
     display.getTracks().forEach((t) => t.stop());
     displayRef.current = null;
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
     setRunning(false);
+    setPaused(false);
     setCurrent(-1);
     setFrameSrc("");
-    setMessage(
-      abortRef.current ? "تم إيقاف الطابور." : "اكتمل الطابور — كل الفيديوهات والنصوص جاهزة.",
-    );
+    setMessage(abortRef.current ? "تم إيقاف الطابور." : "اكتمل الطابور — كل الفيديوهات والنصوص جاهزة.");
     if (!abortRef.current) toast.success("اكتملت كل الفيديوهات.");
   }
 
   function stopQueue() {
     abortRef.current = true;
-    cancelScrollRef.current();
+    skipRef.current = false;
+    pausedRef.current = false;
+    setPaused(false);
+    cancelScrollRef.current.cancel();
     clearCaptionTimers();
     narrationElRef.current?.pause();
+    try {
+      recRef.current?.stop();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function skipQueue() {
+    skipRef.current = true;
+    cancelScrollRef.current.cancel();
+    clearCaptionTimers();
+    narrationElRef.current?.pause();
+    try {
+      recRef.current?.stop();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function pauseQueue() {
+    if (pausedRef.current) return;
+    pausedRef.current = true;
+    setPaused(true);
+    try {
+      if (recRef.current?.state === "recording") recRef.current.pause();
+    } catch {
+      /* ignore */
+    }
+    narrationElRef.current?.pause();
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    cancelScrollRef.current.pause();
+    clearCaptionTimers();
+    compositorRef.current?.setCaption("");
+    setCaption("");
+    setMessage("تم الإيقاف المؤقت — اضغط متابعة للاستئناف.");
+  }
+
+  function resumeQueue() {
+    if (!pausedRef.current) return;
+    pausedRef.current = false;
+    setPaused(false);
+    try {
+      if (recRef.current?.state === "paused") recRef.current.resume();
+    } catch {
+      /* ignore */
+    }
+    void narrationElRef.current?.play().catch(() => {});
+    timerRef.current = window.setInterval(() => {
+      secondsRef.current += 1;
+      setSeconds((s) => s + 1);
+    }, 1000);
+    cancelScrollRef.current.resume();
+    const remaining = currentPageEndRef.current - secondsRef.current;
+    if (remaining > 0 && currentPageTextRef.current && captionsRef.current) {
+      scheduleCaptions(currentPageTextRef.current, remaining, secondsRef.current, captionsRef.current);
+    }
+    setMessage("جارٍ الاستئناف…");
+  }
+
+  async function retryFailed() {
+    const failed = queue.filter((p) => p.status === "failed");
+    if (!failed.length) {
+      toast.error("لا يوجد مواقع فاشلة لإعادة المحاولة.");
+      return;
+    }
+    setRetryItems(failed.map((p) => ({ ...p, status: "pending" as QueueStatus, note: "" })));
+    // startQueue will pick up retryItems
+    await startQueue();
   }
 
   /* ---------------- text only ---------------- */
@@ -655,6 +913,7 @@ function StudioPage() {
   }
 
   const busy = running || textOnly;
+  const hasFailed = queue.some((p) => p.status === "failed");
 
   return (
     <main className="min-h-screen grid-bg">
@@ -684,8 +943,8 @@ function StudioPage() {
             <div
               className="absolute left-0 top-0 origin-top-left overflow-hidden transition-opacity duration-500"
               style={{
-                width: BASE_W,
-                height: BASE_H,
+                width: q.width,
+                height: q.height,
                 transform: `scale(${scale})`,
                 opacity: fade ? 0 : 1,
               }}
@@ -696,13 +955,14 @@ function StudioPage() {
                   src={frameSrc}
                   title="tour"
                   className="border-0"
-                  style={{ width: BASE_W, height: tall, transform: `translateY(${-offset}px)` }}
+                  style={{ width: q.width, height: tall, transform: `translateY(${-offset}px)` }}
                 />
               ) : null}
             </div>
           </div>
 
-          {caption && (
+          {/* only show the overlay preview when not recording — the final MP4 burns the caption */}
+          {caption && !running && (
             <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-6 text-center">
               <p className="mx-auto max-w-[86%] text-lg font-semibold leading-8 text-white drop-shadow">
                 {caption}
@@ -728,12 +988,28 @@ function StudioPage() {
         </div>
 
         {running && (
-          <button
-            onClick={stopQueue}
-            className="fixed bottom-4 left-4 z-[60] rounded-full bg-destructive/90 px-4 py-2 text-xs text-destructive-foreground opacity-25 hover:opacity-100"
-          >
-            إيقاف الطابور
-          </button>
+          <div className="fixed bottom-4 left-4 z-[60] flex items-center gap-2">
+            <button
+              onClick={paused ? resumeQueue : pauseQueue}
+              className="rounded-full bg-primary/90 px-4 py-2 text-xs text-primary-foreground hover:opacity-100"
+            >
+              {paused ? <Play className="me-1 inline size-3.5" /> : <Pause className="me-1 inline size-3.5" />}
+              {paused ? "متابعة" : "إيقاف مؤقت"}
+            </button>
+            <button
+              onClick={skipQueue}
+              className="rounded-full bg-muted/90 px-4 py-2 text-xs text-muted-foreground hover:bg-muted"
+            >
+              <SkipForward className="me-1 inline size-3.5" />
+              تخطّي
+            </button>
+            <button
+              onClick={stopQueue}
+              className="rounded-full bg-destructive/90 px-4 py-2 text-xs text-destructive-foreground hover:opacity-100"
+            >
+              إيقاف الطابور
+            </button>
+          </div>
         )}
 
         <p className="mt-3 text-center text-sm text-muted-foreground">{message}</p>
@@ -850,6 +1126,17 @@ function StudioPage() {
                     ))}
                   </select>
                 </div>
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">
+                    <Mic className="inline size-3.5" /> تعليقي بالميكروفون
+                  </span>
+                  <button
+                    onClick={() => setMic((p) => !p)}
+                    className={`rounded-lg border px-2 py-1.5 text-xs ${mic ? "border-primary bg-primary/20 text-primary" : "border-border bg-card/60 text-muted-foreground"}`}
+                  >
+                    {mic ? "مفعّل" : "معطّل"}
+                  </button>
+                </div>
                 <button
                   onClick={() => void chooseFolder()}
                   disabled={!supportsFolderSave()}
@@ -871,8 +1158,14 @@ function StudioPage() {
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-hero px-6 py-4 text-sm font-bold text-primary-foreground glow-primary disabled:opacity-60"
               >
                 {busy ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
-                ابدأ التسجيل المتواصل ({selectedCount || 0} موقع)
+                ابدأ التسجيل المتواصل ({totalEstimate.count} موقع)
               </button>
+
+              {totalEstimate.count > 0 && (
+                <p className="text-center text-[11px] text-muted-foreground">
+                  تقدير: {fmt(totalEstimate.sec)} إجمالاً، حوالي {totalEstimate.mb} ميغابايت
+                </p>
+              )}
 
               <button
                 onClick={() => void generateTextsOnly()}
@@ -886,6 +1179,17 @@ function StudioPage() {
                 )}
                 توليد النصوص فقط (بدون تسجيل)
               </button>
+
+              {hasFailed && !running && (
+                <button
+                  onClick={() => void retryFailed()}
+                  disabled={busy}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-destructive px-6 py-3 text-xs text-destructive disabled:opacity-60"
+                >
+                  <XCircle className="size-3.5" />
+                  إعادة محاولة المواقع الفاشلة ({queue.filter((p) => p.status === "failed").length})
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -897,29 +1201,32 @@ function StudioPage() {
               التقدّم: {Math.max(0, current + 1)} من {queue.length}
             </p>
             <ul className="grid gap-1.5 sm:grid-cols-2">
-              {queue.map((q, i) => (
+              {queue.map((qi, i) => (
                 <li
-                  key={q.url + i}
+                  key={qi.url + i}
                   className="flex items-center gap-2 rounded-lg border border-border/60 bg-background/40 px-3 py-2 text-xs"
                 >
-                  {q.status === "done" && (
+                  {qi.status === "done" && (
                     <CheckCircle2 className="size-3.5 shrink-0 text-primary" />
                   )}
-                  {q.status === "failed" && (
+                  {qi.status === "failed" && (
                     <XCircle className="size-3.5 shrink-0 text-destructive" />
                   )}
-                  {q.status === "running" && (
+                  {qi.status === "skipped" && (
+                    <SkipForward className="size-3.5 shrink-0 text-muted-foreground" />
+                  )}
+                  {qi.status === "running" && (
                     <Loader2 className="size-3.5 shrink-0 animate-spin text-primary" />
                   )}
-                  {q.status === "pending" && (
+                  {qi.status === "pending" && (
                     <Clock className="size-3.5 shrink-0 text-muted-foreground" />
                   )}
                   <span dir="ltr" className="min-w-0 flex-1 truncate">
-                    {q.name}
+                    {qi.name}
                   </span>
-                  <span className="shrink-0 text-[10px] text-muted-foreground">{q.note ?? ""}</span>
+                  <span className="shrink-0 text-[10px] text-muted-foreground">{qi.note ?? ""}</span>
                   <a
-                    href={q.url}
+                    href={qi.url}
                     target="_blank"
                     rel="noreferrer"
                     className="shrink-0 text-muted-foreground hover:text-primary"
@@ -944,6 +1251,7 @@ function StudioPage() {
               الموقع.
             </li>
             <li>ينتقل للموقع التالي تلقائياً حتى ينتهي الطابور.</li>
+            <li>إذا نفدت أرصدة الذكاء الاصطناعي، يستمر التسجيل بدون صوت وتظهر وسوم مقترحة.</li>
           </ol>
         )}
       </section>
