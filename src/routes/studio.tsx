@@ -143,7 +143,7 @@ function StudioPage() {
 
     // 1) open the site in a new tab, then bring the studio back to front
     //    so the browser's share-picker dialog is visible right away
-    siteWinRef.current = window.open(url, "_blank", "noopener");
+    siteWinRef.current = window.open(url, "_blank");
     window.focus();
     setMessage("اختر تبويب موقعك في نافذة المشاركة…");
     await new Promise((r) => setTimeout(r, 500));
