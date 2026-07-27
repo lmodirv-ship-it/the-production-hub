@@ -700,6 +700,17 @@ function StudioPage() {
       }
       await pauseAwareSleep(800);
     }
+
+    if (shareEndedRef.current && current > 0) {
+      // put the aborted current item and remaining items into retry
+      const failed = items.slice(current - 1);
+      if (failed.length) {
+        setRetryItems(failed.map((f) => ({ ...f, status: "idle" as const })));
+        toast.info("أعد الضغط على «ابدأ» لاستئناف التسجيل من الموقع الحالي.");
+      }
+      shareEndedRef.current = false;
+    }
+
   }
 
   async function startQueue() {
