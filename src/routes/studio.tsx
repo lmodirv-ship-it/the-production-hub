@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import {
-  Sparkles, Video, Square, Loader2, ExternalLink, FolderOpen, FileText,
+  Sparkles, Video, Loader2, ExternalLink, FolderOpen, FileText,
   Play, CheckCircle2, XCircle, Clock, Search, Volume2,
 } from "lucide-react";
 import { SITES } from "@/data/sites";
