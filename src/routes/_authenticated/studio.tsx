@@ -645,8 +645,9 @@ function StudioPage() {
       await pauseAwareSleep(OUTRO_MS);
       comp.setCard(null);
       await pauseAwareSleep(600);
-      if (rec.state !== "inactive") rec.stop();
-      await stopped;
+      stopChunk();
+      // wait for the last onstop to flush
+      await new Promise<void>((r) => setTimeout(r, 1200));
       if (timerRef.current) {
         window.clearInterval(timerRef.current);
         timerRef.current = null;
@@ -658,8 +659,10 @@ function StudioPage() {
 
     if (abortRef.current || skipRef.current) throw new Error("skip");
 
-    const raw = new Blob(chunks, { type: mime.split(";")[0] || "video/webm" });
-    const finalBlob = mime.startsWith("video/mp4") ? raw : await convertToMp4(raw);
+    const finalBlob =
+      siteChunks.length === 1 && mime.startsWith("video/mp4")
+        ? siteChunks[0]
+        : await convertToMp4(siteChunks);
     const base = safeFileBase(item.url);
     const ext = finalBlob.type === "video/mp4" ? "mp4" : "webm";
     const fullScript = scripts.map((s) => s.text).join("\n\n");
@@ -676,6 +679,7 @@ function StudioPage() {
 
     return { where, audioFailed: ttsFailed || (mic && !micStreamRef.current) };
   }
+
 
   /* ---------------- queue ---------------- */
 
