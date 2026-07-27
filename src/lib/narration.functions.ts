@@ -12,11 +12,18 @@ export type NarrationItem = { path: string; text: string };
 export type NarrationResult = { items: NarrationItem[]; fallback: boolean };
 
 function hostOf(url: string) {
-  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return "موقعك"; }
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "موقعك";
+  }
 }
 
 function labelOf(path: string) {
-  const clean = path.replace(/^\//, "").replace(/[-_/]+/g, " ").trim();
+  const clean = path
+    .replace(/^\//, "")
+    .replace(/[-_/]+/g, " ")
+    .trim();
   return clean || "الصفحة الرئيسية";
 }
 
@@ -26,9 +33,10 @@ function fallbackNarration(url: string, paths: string[]): NarrationResult {
     fallback: true,
     items: paths.map((path, i) => ({
       path,
-      text: i === 0
-        ? `أهلاً بكم في جولة سريعة داخل موقع ${site}. سنستعرض معاً أهم الصفحات والخدمات التي يقدمها الموقع بشكل مبسّط وواضح.`
-        : `ننتقل الآن إلى قسم ${labelOf(path)} في موقع ${site}، حيث يجد الزائر تفاصيل إضافية معروضة بتصميم مرتّب وسهل التصفح.`,
+      text:
+        i === 0
+          ? `أهلاً بكم في جولة سريعة داخل موقع ${site}. سنستعرض معاً أهم الصفحات والخدمات التي يقدمها الموقع بشكل مبسّط وواضح.`
+          : `ننتقل الآن إلى قسم ${labelOf(path)} في موقع ${site}، حيث يجد الزائر تفاصيل إضافية معروضة بتصميم مرتّب وسهل التصفح.`,
     })),
   };
 }
@@ -45,7 +53,9 @@ async function fetchPageText(url: string): Promise<string> {
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, 4000);
-  } catch { return ""; }
+  } catch {
+    return "";
+  }
 }
 
 /** One AI call that writes a short Arabic voice-over line per page. */
@@ -87,11 +97,12 @@ ${data.paths.map((p, i) => `${i + 1}. ${p}`).join("\n")}`;
       });
       if (!res.ok) return fallbackNarration(data.url, data.paths);
 
-      const json = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+      const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
       const content = json.choices?.[0]?.message?.content ?? "{}";
       let parsed: { items?: NarrationItem[] };
-      try { parsed = JSON.parse(content); }
-      catch {
+      try {
+        parsed = JSON.parse(content);
+      } catch {
         const m = content.match(/\{[\s\S]*\}/);
         parsed = m ? JSON.parse(m[0]) : {};
       }
@@ -147,7 +158,12 @@ export const generateLongNarration = createServerFn({ method: "POST" })
         fallback: true,
         items: base.items.map((it, i) => ({
           path: it.path,
-          text: padTo(i === 0 && desc ? `${it.text} ${desc}` : it.text, per, site, labelOf(it.path)),
+          text: padTo(
+            i === 0 && desc ? `${it.text} ${desc}` : it.text,
+            per,
+            site,
+            labelOf(it.path),
+          ),
         })),
       };
     };
@@ -186,11 +202,12 @@ ${data.paths.map((p, i) => `${i + 1}. ${p}`).join("\n")}
       });
       if (!res.ok) return makeFallback();
 
-      const json = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+      const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
       const content = json.choices?.[0]?.message?.content ?? "{}";
       let parsed: { items?: NarrationItem[] };
-      try { parsed = JSON.parse(content); }
-      catch {
+      try {
+        parsed = JSON.parse(content);
+      } catch {
         const m = content.match(/\{[\s\S]*\}/);
         parsed = m ? JSON.parse(m[0]) : {};
       }
@@ -210,7 +227,6 @@ const SpeechInput = z.object({
   text: z.string().min(1).max(2000),
   voice: z.string().default("alloy"),
 });
-
 
 function toBase64(buf: ArrayBuffer) {
   const bytes = new Uint8Array(buf);
@@ -243,7 +259,8 @@ export const synthesizeSpeech = createServerFn({ method: "POST" })
 
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
-      if (res.status === 402) throw new Error("نفدت أرصدة الذكاء الاصطناعي — يمكنك التسجيل بدون تعليق آلي.");
+      if (res.status === 402)
+        throw new Error("نفدت أرصدة الذكاء الاصطناعي — يمكنك التسجيل بدون تعليق آلي.");
       if (res.status === 429) throw new Error("الحد الأقصى للطلبات. جرّب بعد قليل.");
       throw new Error(`TTS error: ${res.status} ${txt.slice(0, 160)}`);
     }

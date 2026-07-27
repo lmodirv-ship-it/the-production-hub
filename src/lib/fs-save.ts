@@ -7,8 +7,14 @@ type DirHandle = {
   name: string;
   queryPermission?: (o: { mode: string }) => Promise<PermissionState>;
   requestPermission?: (o: { mode: string }) => Promise<PermissionState>;
-  getFileHandle: (n: string, o?: { create?: boolean }) => Promise<{
-    createWritable: () => Promise<{ write: (d: Blob | string) => Promise<void>; close: () => Promise<void> }>;
+  getFileHandle: (
+    n: string,
+    o?: { create?: boolean },
+  ) => Promise<{
+    createWritable: () => Promise<{
+      write: (d: Blob | string) => Promise<void>;
+      close: () => Promise<void>;
+    }>;
   }>;
 };
 
@@ -25,7 +31,9 @@ function idb(): Promise<IDBDatabase | null> {
       req.onupgradeneeded = () => req.result.createObjectStore(STORE);
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => resolve(null);
-    } catch { resolve(null); }
+    } catch {
+      resolve(null);
+    }
   });
 }
 
@@ -35,7 +43,9 @@ async function persist(handle: DirHandle | null) {
   try {
     const tx = db.transaction(STORE, "readwrite");
     tx.objectStore(STORE).put(handle, "dir");
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 export function supportsFolderSave() {
@@ -70,12 +80,16 @@ export async function restoreFolder(): Promise<string> {
         } else resolve("");
       };
       req.onerror = () => resolve("");
-    } catch { resolve(""); }
+    } catch {
+      resolve("");
+    }
   });
 }
 
 export async function pickFolder(): Promise<string> {
-  const picker = (window as unknown as { showDirectoryPicker?: (o?: unknown) => Promise<DirHandle> }).showDirectoryPicker;
+  const picker = (
+    window as unknown as { showDirectoryPicker?: (o?: unknown) => Promise<DirHandle> }
+  ).showDirectoryPicker;
   if (!picker) throw new Error("المتصفح لا يدعم اختيار مجلد — استخدم Chrome أو Edge.");
   const h = await picker({ mode: "readwrite", startIn: "documents" });
   if (!(await ensurePermission(h))) throw new Error("لم يُمنح إذن الكتابة في المجلد.");
@@ -103,8 +117,12 @@ function browserDownload(data: Blob, filename: string) {
 }
 
 /** Write into the chosen folder, or download it. Returns "folder" | "download". */
-export async function saveFile(data: Blob | string, filename: string): Promise<"folder" | "download"> {
-  const blob = typeof data === "string" ? new Blob([data], { type: "text/plain;charset=utf-8" }) : data;
+export async function saveFile(
+  data: Blob | string,
+  filename: string,
+): Promise<"folder" | "download"> {
+  const blob =
+    typeof data === "string" ? new Blob([data], { type: "text/plain;charset=utf-8" }) : data;
   if (dirHandle) {
     try {
       const fh = await dirHandle.getFileHandle(filename, { create: true });

@@ -23,7 +23,10 @@ export function splitCaptions(text: string, maxWords = 9): string[] {
     const s = raw.trim();
     if (!s) continue;
     const words = s.match(/\S+/g) ?? [];
-    if (words.length <= maxWords) { out.push(s); continue; }
+    if (words.length <= maxWords) {
+      out.push(s);
+      continue;
+    }
     for (let i = 0; i < words.length; i += maxWords) {
       out.push(words.slice(i, i + maxWords).join(" "));
     }
@@ -69,15 +72,10 @@ export function buildDescriptionFile(opts: {
   script: string;
 }) {
   const mm = Math.floor(opts.seconds / 60);
-  const ss = Math.round(opts.seconds % 60).toString().padStart(2, "0");
-  const tags = [
-    opts.name,
-    "HN Groupe",
-    "Lovable",
-    "تطبيق ويب",
-    "شرح موقع",
-    "ذكاء اصطناعي",
-  ];
+  const ss = Math.round(opts.seconds % 60)
+    .toString()
+    .padStart(2, "0");
+  const tags = [opts.name, "HN Groupe", "Lovable", "تطبيق ويب", "شرح موقع", "ذكاء اصطناعي"];
   return [
     `${opts.name} — جولة تعريفية`,
     `الرابط: ${opts.url}`,

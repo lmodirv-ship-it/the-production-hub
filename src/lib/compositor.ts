@@ -111,8 +111,12 @@ export function startCompositor(
 
   return {
     stream: canvas.captureStream(fps),
-    setCaption: (t) => { caption = t; },
-    setBadge: (t) => { badge = t; },
+    setCaption: (t) => {
+      caption = t;
+    },
+    setBadge: (t) => {
+      badge = t;
+    },
     stop: () => {
       stopped = true;
       cancelAnimationFrame(raf);
