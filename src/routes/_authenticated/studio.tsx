@@ -88,9 +88,9 @@ const VOICES = [
 ];
 
 const DURATIONS = [
-  { s: MIN_VIDEO_SECONDS, label: "٣:١٥ دقيقة" },
+  { s: MIN_VIDEO_SECONDS, label: "٥ دقائق" },
+  { s: 360, label: "٦ دقائق" },
   { s: 240, label: "٤ دقائق" },
-  { s: 300, label: "٥ دقائق" },
 ];
 
 const INTRO_MS = 3500;
