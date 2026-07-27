@@ -327,8 +327,9 @@ function StudioPage() {
       } else {
         try {
           const { audio, mime } = await synthesizeSpeech({
-            data: { text: it.text.slice(0, 1900), voice },
+            data: { text: it.text.slice(0, 1900), voice, locale },
           });
+
           const url = base64ToBlobUrl(audio, mime);
           const dur = await audioDuration(url);
           if (dur > 0) {
