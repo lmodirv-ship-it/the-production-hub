@@ -5,11 +5,14 @@ import { z } from "zod";
 import {
   Sparkles, Video, Download, Square, Loader2, Mic, MicOff, ExternalLink,
   Search, Plus, Trash2, ArrowUp, ArrowDown, MonitorPlay, AppWindow,
+  Volume2, VolumeX, Wand2,
 } from "lucide-react";
 import { discoverPages } from "@/lib/pages.functions";
+import { generateNarration, synthesizeSpeech } from "@/lib/narration.functions";
 import {
-  DEFAULT_SECONDS, animateScroll, fileNameFor, fmt, loadStops, normalizeUrl,
-  originOf, saveStops, sleep, totalDuration, type TourStop,
+  DEFAULT_SECONDS, QUALITY, animateScrollCinematic, audioDuration, base64ToBlobUrl,
+  fileNameFor, fmt, loadStops, normalizeUrl, originOf, saveStops, sleep, totalDuration,
+  type QualityKey, type TourStop,
 } from "@/lib/tour";
 
 const search = z.object({ url: z.string().optional() }).partial();
@@ -19,9 +22,9 @@ export const Route = createFileRoute("/studio")({
   head: () => ({
     meta: [
       { title: "استوديو الجولات — Eco AI" },
-      { name: "description", content: "جولة تلقائية بين صفحات موقعك مع تمرير سينمائي وتسجيل MP4 جاهز للنشر." },
+      { name: "description", content: "جولة تلقائية بين صفحات موقعك مع تعليق صوتي وتمرير سينمائي وتسجيل MP4 جاهز للنشر." },
       { property: "og:title", content: "استوديو الجولات — Eco AI" },
-      { property: "og:description", content: "جولة تلقائية بين صفحات موقعك مع تمرير سينمائي وتسجيل MP4 جاهز للنشر." },
+      { property: "og:description", content: "جولة تلقائية بين صفحات موقعك مع تعليق صوتي وتمرير سينمائي وتسجيل MP4 جاهز للنشر." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -29,11 +32,21 @@ export const Route = createFileRoute("/studio")({
   component: StudioPage,
 });
 
-type Phase = "idle" | "recording" | "processing" | "done";
+type Phase = "idle" | "preparing" | "recording" | "processing" | "done";
 type Mode = "cinema" | "tab";
+type NarrationMode = "none" | "mic" | "ai";
 
 const BASE_W = 1280;
 const BASE_H = 720;
+
+const VOICES = [
+  { id: "alloy", label: "هادئ" },
+  { id: "verse", label: "حيوي" },
+  { id: "sage", label: "رصين" },
+  { id: "coral", label: "دافئ" },
+];
+
+type Clip = { url: string; seconds: number };
 
 function StudioPage() {
   const sp = useSearch({ from: "/studio" });
@@ -45,13 +58,20 @@ function StudioPage() {
   const [depth, setDepth] = useState(3);
   const [discovering, setDiscovering] = useState(false);
 
+  const [quality, setQuality] = useState<QualityKey>("fhd");
+  const [narrationMode, setNarrationMode] = useState<NarrationMode>("none");
+  const [voice, setVoice] = useState("alloy");
+  const [scripts, setScripts] = useState<Record<string, string>>({});
+  const [preparing, setPreparing] = useState(false);
+
   const [phase, setPhase] = useState<Phase>("idle");
   const [seconds, setSeconds] = useState(0);
-  const [useMic, setUseMic] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [downloadName, setDownloadName] = useState("video.mp4");
   const [message, setMessage] = useState("ألصق رابط موقعك، اكتشف صفحاته، ثم اضغط «ابدأ الجولة».");
   const [stopLabel, setStopLabel] = useState("");
+  const [cardTitle, setCardTitle] = useState("");
+  const [showCard, setShowCard] = useState(false);
 
   const [frameSrc, setFrameSrc] = useState("");
   const [offset, setOffset] = useState(0);
@@ -62,6 +82,7 @@ function StudioPage() {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const narrationElRef = useRef<HTMLAudioElement | null>(null);
   const recRef = useRef<MediaRecorder | null>(null);
   const streamsRef = useRef<MediaStream[]>([]);
   const chunksRef = useRef<Blob[]>([]);
@@ -69,6 +90,9 @@ function StudioPage() {
   const siteWinRef = useRef<Window | null>(null);
   const abortRef = useRef(false);
   const cancelScrollRef = useRef<() => void>(() => {});
+  const clipsRef = useRef<Record<string, Clip>>({});
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const mediaSrcRef = useRef<MediaElementAudioSourceNode | null>(null);
 
   const tall = BASE_H * depth;
 
@@ -85,6 +109,8 @@ function StudioPage() {
     return () => {
       streamsRef.current.forEach((s) => s.getTracks().forEach((t) => t.stop()));
       if (timerRef.current) window.clearInterval(timerRef.current);
+      Object.values(clipsRef.current).forEach((c) => URL.revokeObjectURL(c.url));
+      void audioCtxRef.current?.close().catch(() => {});
     };
   }, []);
 
@@ -129,6 +155,81 @@ function StudioPage() {
     setNewPath("");
   };
 
+  /* ---------------- narration ---------------- */
+
+  async function writeScripts() {
+    const url = normalizeUrl(input);
+    if (!url) { toast.error("أدخل رابط موقعك أولاً."); return; }
+    const list = stops.filter((s) => s.enabled);
+    if (!list.length) { toast.error("فعّل صفحة واحدة على الأقل."); return; }
+    setPreparing(true);
+    setMessage("جاري كتابة التعليق لكل صفحة…");
+    try {
+      const res = await generateNarration({ data: { url, paths: list.map((s) => s.path) } });
+      const next: Record<string, string> = {};
+      res.items.forEach((it) => { next[it.path] = it.text; });
+      setScripts((prev) => ({ ...prev, ...next }));
+      setNarrationMode("ai");
+      toast.success(res.fallback ? "تم إعداد نص افتراضي (يمكنك تعديله)." : "تم إعداد التعليق لكل صفحة.");
+      setMessage("راجع النصوص ثم اضغط «ابدأ الجولة».");
+    } catch (e) {
+      console.error(e);
+      toast.error("تعذّر توليد النصوص — يمكنك كتابتها يدوياً.");
+    } finally {
+      setPreparing(false);
+    }
+  }
+
+  /** Turn each script into an mp3 clip and align the stop duration to it. */
+  async function buildClips(list: TourStop[]): Promise<TourStop[]> {
+    Object.values(clipsRef.current).forEach((c) => URL.revokeObjectURL(c.url));
+    clipsRef.current = {};
+    const out: TourStop[] = [];
+    for (let i = 0; i < list.length; i++) {
+      const s = list[i];
+      const text = (scripts[s.path] ?? "").trim();
+      if (!text) { out.push(s); continue; }
+      setMessage(`توليد الصوت ${i + 1}/${list.length}…`);
+      try {
+        const { audio, mime } = await synthesizeSpeech({ data: { text, voice } });
+        const url = base64ToBlobUrl(audio, mime);
+        const dur = await audioDuration(url);
+        clipsRef.current[s.path] = { url, seconds: dur };
+        out.push({ ...s, seconds: Math.max(s.seconds, Math.ceil(dur) + 3) });
+      } catch (e) {
+        console.error(e);
+        toast.warning(`تعذّر توليد صوت الصفحة ${s.path}.`);
+        out.push(s);
+      }
+    }
+    return out;
+  }
+
+  function attachNarrationTrack(tracks: MediaStreamTrack[]) {
+    const el = narrationElRef.current;
+    if (!el) return;
+    try {
+      const ctx = audioCtxRef.current ?? new AudioContext();
+      audioCtxRef.current = ctx;
+      void ctx.resume().catch(() => {});
+      const dest = ctx.createMediaStreamDestination();
+      if (!mediaSrcRef.current) mediaSrcRef.current = ctx.createMediaElementSource(el);
+      mediaSrcRef.current.connect(dest);
+      tracks.push(...dest.stream.getAudioTracks());
+    } catch (e) {
+      console.error("audio mix failed", e);
+    }
+  }
+
+  function playClip(path: string) {
+    const clip = clipsRef.current[path];
+    const el = narrationElRef.current;
+    if (!clip || !el) return;
+    el.src = clip.url;
+    el.currentTime = 0;
+    void el.play().catch(() => {});
+  }
+
   /* ---------------- export ---------------- */
 
   const convertToMp4 = useCallback(async (blob: Blob): Promise<Blob> => {
@@ -145,8 +246,8 @@ function StudioPage() {
       await ffmpeg.writeFile("in.webm", await fetchFile(blob));
       await ffmpeg.exec([
         "-i", "in.webm",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
-        "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+        "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k",
         "-movflags", "+faststart", "out.mp4",
       ]);
       const data = await ffmpeg.readFile("out.mp4");
@@ -182,13 +283,17 @@ function StudioPage() {
     if (timerRef.current) { window.clearInterval(timerRef.current); timerRef.current = null; }
     streamsRef.current.forEach((s) => s.getTracks().forEach((t) => t.stop()));
     streamsRef.current = [];
+    const el = narrationElRef.current;
+    if (el) { el.pause(); el.removeAttribute("src"); }
     if (videoRef.current) videoRef.current.srcObject = null;
+    setShowCard(false);
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
   }, []);
 
   const stopRecording = useCallback(() => {
     abortRef.current = true;
     cancelScrollRef.current();
+    narrationElRef.current?.pause();
     const rec = recRef.current;
     if (rec && rec.state !== "inactive") rec.stop();
   }, []);
@@ -201,6 +306,7 @@ function StudioPage() {
       const stop = list[i];
       setStopLabel(`${i + 1}/${list.length} — ${stop.path}`);
       setFade(true);
+      setShowCard(false);
       setOffset(0);
       setFrameSrc(`${origin}${stop.path}`);
       await Promise.race([
@@ -213,18 +319,24 @@ function StudioPage() {
         sleep(6000),
       ]);
       if (abortRef.current) return;
+
       setFade(false);
-      await sleep(1200);
+      setCardTitle(stop.path === "/" ? "الصفحة الرئيسية" : stop.path.replace(/^\//, ""));
+      setShowCard(true);
+      playClip(stop.path);
+      await sleep(1400);
+      setShowCard(false);
       if (abortRef.current) return;
 
-      const scrollMs = Math.max(1500, stop.seconds * 1000 - 2200);
-      const anim = animateScroll(tall - BASE_H, scrollMs, setOffset);
+      const scrollMs = Math.max(1800, stop.seconds * 1000 - 2600);
+      const segments = Math.max(2, Math.round(stop.seconds / 4));
+      const anim = animateScrollCinematic(tall - BASE_H, scrollMs, segments, setOffset);
       cancelScrollRef.current = anim.cancel;
       await anim.done;
       if (abortRef.current) return;
-      await sleep(600);
+      await sleep(700);
       setFade(true);
-      await sleep(400);
+      await sleep(500);
     }
   }
 
@@ -234,6 +346,7 @@ function StudioPage() {
       const stop = list[i];
       setStopLabel(`${i + 1}/${list.length} — ${stop.path}`);
       try { siteWinRef.current!.location.href = `${origin}${stop.path}`; } catch { /* closed */ }
+      playClip(stop.path);
       await sleep(stop.seconds * 1000);
     }
   }
@@ -244,7 +357,7 @@ function StudioPage() {
     const url = normalizeUrl(input);
     const origin = originOf(url);
     if (!origin) { toast.error("أدخل رابط موقعك أولاً."); return; }
-    const list = stops.filter((s) => s.enabled);
+    let list = stops.filter((s) => s.enabled);
     if (!list.length) { toast.error("فعّل صفحة واحدة على الأقل."); return; }
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getDisplayMedia) {
       toast.error("متصفحك لا يدعم التسجيل. استخدم Chrome أو Edge على الحاسوب.");
@@ -254,6 +367,12 @@ function StudioPage() {
     if (previewUrl) { URL.revokeObjectURL(previewUrl); setPreviewUrl(null); }
     setDownloadName(fileNameFor(url));
     abortRef.current = false;
+
+    if (narrationMode === "ai") {
+      setPhase("preparing");
+      list = await buildClips(list);
+      if (abortRef.current) { setPhase("idle"); return; }
+    }
 
     if (mode === "tab") {
       siteWinRef.current = window.open(`${origin}${list[0].path}`, "_blank");
@@ -267,32 +386,54 @@ function StudioPage() {
       ? "اختر «هذا التبويب» في نافذة المشاركة…"
       : "اختر تبويب موقعك في نافذة المشاركة…");
 
+    const q = QUALITY[quality];
     let display: MediaStream;
     try {
       display = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: 30, width: { ideal: 1920 }, height: { ideal: 1080 }, displaySurface: "browser" },
-        audio: true,
+        video: {
+          frameRate: { ideal: q.fps, max: q.fps },
+          width: { ideal: q.width },
+          height: { ideal: q.height },
+          displaySurface: "browser",
+        },
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
         preferCurrentTab: mode === "cinema",
         selfBrowserSurface: mode === "cinema" ? "include" : "exclude",
         surfaceSwitching: "exclude",
       } as DisplayMediaStreamOptions);
     } catch (err) {
       console.error(err);
+      setPhase("idle");
       setMessage("تم إلغاء المشاركة. اضغط «ابدأ الجولة» للمحاولة مجدداً.");
       toast.error("لم يتم منح إذن التسجيل.");
       return;
     }
     streamsRef.current.push(display);
 
-    const tracks = [...display.getVideoTracks(), ...display.getAudioTracks()];
-    if (useMic) {
+    const videoTrack = display.getVideoTracks()[0];
+    try {
+      videoTrack.contentHint = "detail";
+      await videoTrack.applyConstraints({
+        frameRate: { ideal: q.fps },
+        width: { ideal: q.width },
+        height: { ideal: q.height },
+      });
+    } catch { /* browser keeps its own best match */ }
+
+    const tracks: MediaStreamTrack[] = [...display.getVideoTracks(), ...display.getAudioTracks()];
+
+    if (narrationMode === "mic") {
       try {
-        const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mic = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        });
         streamsRef.current.push(mic);
         tracks.push(...mic.getAudioTracks());
       } catch {
         toast.warning("تعذّر الوصول للميكروفون — سيتم التسجيل بدون تعليق صوتي.");
       }
+    } else if (narrationMode === "ai") {
+      attachNarrationTrack(tracks);
     }
 
     const candidates = [
@@ -304,12 +445,16 @@ function StudioPage() {
     ];
     const mime = candidates.find((m) => MediaRecorder.isTypeSupported(m)) ?? "video/webm";
 
-    const rec = new MediaRecorder(new MediaStream(tracks), { mimeType: mime, videoBitsPerSecond: 6_000_000 });
+    const rec = new MediaRecorder(new MediaStream(tracks), {
+      mimeType: mime,
+      videoBitsPerSecond: q.videoBps,
+      audioBitsPerSecond: 128_000,
+    });
     recRef.current = rec;
     chunksRef.current = [];
     rec.ondataavailable = (e) => { if (e.data.size) chunksRef.current.push(e.data); };
     rec.onstop = () => { stopAll(); void finalize(mime); };
-    display.getVideoTracks()[0]?.addEventListener("ended", () => stopRecording());
+    videoTrack?.addEventListener("ended", () => stopRecording());
 
     setPhase("recording");
     setSeconds(0);
@@ -330,7 +475,7 @@ function StudioPage() {
       else await runTabTour(origin, list);
     } finally {
       if (!abortRef.current) {
-        await sleep(400);
+        await sleep(600);
         stopRecording();
       }
     }
@@ -345,11 +490,14 @@ function StudioPage() {
   }
 
   const recording = phase === "recording";
-  const busy = phase === "processing";
+  const busy = phase === "processing" || phase === "preparing";
   const cinemaLive = recording && mode === "cinema";
+  const enabledStops = stops.filter((s) => s.enabled);
 
   return (
     <main className="min-h-screen grid-bg">
+      <audio ref={narrationElRef} className="hidden" />
+
       <header className="container mx-auto flex items-center justify-between py-5 px-6">
         <Link to="/" className="flex items-center gap-2 hover:opacity-80">
           <div className="size-9 rounded-xl bg-gradient-hero grid place-items-center glow-primary">
@@ -363,7 +511,7 @@ function StudioPage() {
       <section className="container mx-auto px-6 pb-16 max-w-4xl">
         <h1 className="text-2xl md:text-3xl font-bold mb-2">جولة تلقائية داخل موقعك</h1>
         <p className="text-sm text-muted-foreground mb-6">
-          المتصفح يتنقل بين الصفحات ويمرّر داخل كل صفحة تلقائياً، والفيديو ينزل MP4 في النهاية.
+          المتصفح يتنقل بين الصفحات، يمرّر تلقائياً، ويقرأ تعليقاً صوتياً لكل صفحة — والفيديو ينزل MP4 في النهاية.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3 mb-4">
@@ -418,13 +566,114 @@ function StudioPage() {
               >
                 <AppWindow className="size-3.5" /> تبويب منفصل (تنقّل فقط)
               </button>
+
+              <div className="ms-auto flex items-center gap-2 text-xs text-muted-foreground">
+                الجودة
+                <select
+                  value={quality}
+                  onChange={(e) => setQuality(e.target.value as QualityKey)}
+                  className="rounded-lg border border-border bg-card/60 px-2 py-1.5 text-xs outline-none focus:border-primary"
+                >
+                  {(Object.keys(QUALITY) as QualityKey[]).map((k) => (
+                    <option key={k} value={k}>{QUALITY[k].label} · {QUALITY[k].fps}fps</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* narration controls */}
+            <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-background/40 p-3">
               <button
-                onClick={() => setUseMic((v) => !v)}
-                className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => setNarrationMode("none")}
+                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${narrationMode === "none" ? "border-primary text-primary" : "border-border text-muted-foreground"}`}
               >
-                {useMic ? <Mic className="size-3.5 text-primary" /> : <MicOff className="size-3.5" />}
-                {useMic ? "التعليق بصوتي مفعّل" : "تعليق بصوتي"}
+                <VolumeX className="size-3.5" /> بدون تعليق
               </button>
+              <button
+                onClick={() => setNarrationMode("mic")}
+                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${narrationMode === "mic" ? "border-primary text-primary" : "border-border text-muted-foreground"}`}
+              >
+                {narrationMode === "mic" ? <Mic className="size-3.5" /> : <MicOff className="size-3.5" />} بصوتي
+              </button>
+              <button
+                onClick={() => setNarrationMode("ai")}
+                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${narrationMode === "ai" ? "border-primary text-primary" : "border-border text-muted-foreground"}`}
+              >
+                <Volume2 className="size-3.5" /> صوت آلي
+              </button>
+
+              {narrationMode === "ai" && (
+                <>
+                  <select
+                    value={voice}
+                    onChange={(e) => setVoice(e.target.value)}
+                    className="rounded-lg border border-border bg-card/60 px-2 py-1.5 text-xs outline-none focus:border-primary"
+                  >
+                    {VOICES.map((v) => <option key={v.id} value={v.id}>صوت {v.label}</option>)}
+                  </select>
+                  <button
+                    onClick={() => void writeScripts()}
+                    disabled={preparing}
+                    className="inline-flex items-center gap-2 rounded-lg border border-primary px-3 py-2 text-xs text-primary disabled:opacity-60"
+                  >
+                    {preparing ? <Loader2 className="size-3.5 animate-spin" /> : <Wand2 className="size-3.5" />}
+                    اكتب التعليق تلقائياً
+                  </button>
+                  <span className="text-[11px] text-muted-foreground">
+                    مدة كل صفحة تُضبط تلقائياً حسب طول الصوت.
+                  </span>
+                </>
+              )}
+            </div>
+
+            <ul className="space-y-2">
+              {stops.map((s, i) => (
+                <li key={s.path + i} className="rounded-lg border border-border/60 bg-background/40 px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={s.enabled}
+                      onChange={(e) => update(stops.map((x, j) => (j === i ? { ...x, enabled: e.target.checked } : x)))}
+                      className="accent-primary"
+                    />
+                    <span dir="ltr" className="flex-1 truncate text-xs">{s.path}</span>
+                    <input
+                      type="number" min={3} max={90}
+                      value={s.seconds}
+                      onChange={(e) => update(stops.map((x, j) => (j === i ? { ...x, seconds: Math.max(3, Number(e.target.value) || DEFAULT_SECONDS) } : x)))}
+                      className="w-16 rounded-md border border-border bg-card/60 px-2 py-1 text-xs"
+                    />
+                    <span className="text-[10px] text-muted-foreground">ثانية</span>
+                    <button onClick={() => move(i, -1)} className="text-muted-foreground hover:text-foreground"><ArrowUp className="size-3.5" /></button>
+                    <button onClick={() => move(i, 1)} className="text-muted-foreground hover:text-foreground"><ArrowDown className="size-3.5" /></button>
+                    <button onClick={() => update(stops.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button>
+                  </div>
+                  {narrationMode === "ai" && s.enabled && (
+                    <textarea
+                      value={scripts[s.path] ?? ""}
+                      onChange={(e) => setScripts((p) => ({ ...p, [s.path]: e.target.value }))}
+                      placeholder="نص التعليق الصوتي لهذه الصفحة…"
+                      rows={2}
+                      className="mt-2 w-full resize-y rounded-md border border-border bg-card/60 px-3 py-2 text-xs leading-6 outline-none focus:border-primary"
+                    />
+                  )}
+                </li>
+              ))}
+            </ul>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <input
+                value={newPath}
+                onChange={(e) => setNewPath(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") addPath(); }}
+                placeholder="/pricing"
+                dir="ltr"
+                className="flex-1 rounded-lg border border-border bg-card/60 px-3 py-2 text-xs outline-none focus:border-primary"
+              />
+              <button onClick={addPath} className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-xs hover:border-primary">
+                <Plus className="size-3.5" /> إضافة
+              </button>
+              <span className="text-xs text-muted-foreground">مدة الفيديو ≈ {fmt(totalDuration(stops))}</span>
               {mode === "cinema" && (
                 <label className="ms-auto flex items-center gap-2 text-xs text-muted-foreground">
                   عمق التمرير
@@ -438,45 +687,6 @@ function StudioPage() {
                 </label>
               )}
             </div>
-
-            <ul className="space-y-2">
-              {stops.map((s, i) => (
-                <li key={s.path + i} className="flex items-center gap-2 rounded-lg border border-border/60 bg-background/40 px-3 py-2">
-                  <input
-                    type="checkbox"
-                    checked={s.enabled}
-                    onChange={(e) => update(stops.map((x, j) => (j === i ? { ...x, enabled: e.target.checked } : x)))}
-                    className="accent-primary"
-                  />
-                  <span dir="ltr" className="flex-1 truncate text-xs">{s.path}</span>
-                  <input
-                    type="number" min={3} max={60}
-                    value={s.seconds}
-                    onChange={(e) => update(stops.map((x, j) => (j === i ? { ...x, seconds: Math.max(3, Number(e.target.value) || DEFAULT_SECONDS) } : x)))}
-                    className="w-16 rounded-md border border-border bg-card/60 px-2 py-1 text-xs"
-                  />
-                  <span className="text-[10px] text-muted-foreground">ثانية</span>
-                  <button onClick={() => move(i, -1)} className="text-muted-foreground hover:text-foreground"><ArrowUp className="size-3.5" /></button>
-                  <button onClick={() => move(i, 1)} className="text-muted-foreground hover:text-foreground"><ArrowDown className="size-3.5" /></button>
-                  <button onClick={() => update(stops.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button>
-                </li>
-              ))}
-            </ul>
-
-            <div className="mt-3 flex items-center gap-2">
-              <input
-                value={newPath}
-                onChange={(e) => setNewPath(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") addPath(); }}
-                placeholder="/pricing"
-                dir="ltr"
-                className="flex-1 rounded-lg border border-border bg-card/60 px-3 py-2 text-xs outline-none focus:border-primary"
-              />
-              <button onClick={addPath} className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-2 text-xs hover:border-primary">
-                <Plus className="size-3.5" /> إضافة
-              </button>
-              <span className="text-xs text-muted-foreground">مدة الفيديو ≈ {fmt(totalDuration(stops))}</span>
-            </div>
           </div>
         )}
 
@@ -489,7 +699,7 @@ function StudioPage() {
           ) : mode === "cinema" ? (
             <div ref={shellRef} className="relative h-full w-full overflow-hidden">
               <div
-                className="absolute left-0 top-0 origin-top-left overflow-hidden transition-opacity duration-300"
+                className="absolute left-0 top-0 origin-top-left overflow-hidden transition-opacity duration-500"
                 style={{ width: BASE_W, height: BASE_H, transform: `scale(${scale})`, opacity: fade ? 0 : 1 }}
               >
                 {frameSrc ? (
@@ -505,6 +715,16 @@ function StudioPage() {
             </div>
           ) : (
             <video ref={videoRef} muted playsInline className="h-full w-full object-contain" />
+          )}
+
+          {recording && (
+            <div
+              className="pointer-events-none absolute top-6 right-6 rounded-xl bg-black/70 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition-all duration-500"
+              style={{ opacity: showCard ? 1 : 0, transform: showCard ? "translateY(0)" : "translateY(-8px)" }}
+              dir="ltr"
+            >
+              {cardTitle}
+            </div>
           )}
 
           {phase === "idle" && !frameSrc && (
@@ -566,11 +786,11 @@ function StudioPage() {
         </div>
 
         <ol className="mt-8 space-y-2 text-xs text-muted-foreground list-decimal ps-5">
-          <li>ضع الرابط ثم «اكتشف الصفحات»، ورتّب القائمة وحدّد مدة كل صفحة.</li>
+          <li>ضع الرابط ثم «اكتشف الصفحات»، ورتّب القائمة ({enabledStops.length} صفحة مفعّلة).</li>
+          <li>اختر الجودة، ثم «صوت آلي» + «اكتب التعليق تلقائياً» لتوليد نص لكل صفحة (قابل للتعديل).</li>
           <li>اضغط «ابدأ الجولة» واختر «هذا التبويب» في نافذة المشاركة.</li>
-          <li>يتحول العرض لملء الشاشة ويبدأ التنقّل والتمرير التلقائي.</li>
+          <li>التمرير سينمائي مع وقفات، وانتقال تلاشٍ بين الصفحات، والصوت يُدمج داخل الفيديو.</li>
           <li>عند انتهاء آخر صفحة يتوقف التسجيل وينزل MP4 باسم موقعك تلقائياً.</li>
-          <li>إن لم يظهر موقعك داخل العارض، بدّل إلى «تبويب منفصل».</li>
         </ol>
       </section>
     </main>

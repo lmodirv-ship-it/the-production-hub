@@ -97,6 +97,82 @@ export function animateScroll(
   };
 }
 
+/**
+ * Cinematic scroll: splits the travel into segments with a short hold at the
+ * end of each one, so the camera "reads" the page instead of sliding past it.
+ */
+export function animateScrollCinematic(
+  distance: number,
+  durationMs: number,
+  segments: number,
+  onFrame: (offset: number) => void,
+): { done: Promise<void>; cancel: () => void } {
+  const n = Math.max(1, Math.round(segments));
+  const holdMs = 550;
+  const moveTotal = Math.max(600, durationMs - holdMs * (n - 1));
+  const moveEach = moveTotal / n;
+  const cycle = moveEach + holdMs;
+
+  let raf = 0;
+  let cancelled = false;
+  let resolveDone: () => void = () => {};
+  const done = new Promise<void>((r) => (resolveDone = r));
+  const start = performance.now();
+  const total = moveTotal + holdMs * (n - 1);
+
+  const step = (now: number) => {
+    if (cancelled) return resolveDone();
+    const elapsed = now - start;
+    const t = Math.min(1, elapsed / Math.max(1, total));
+    const idx = Math.min(n - 1, Math.floor(elapsed / cycle));
+    const inSeg = Math.min(moveEach, elapsed - idx * cycle);
+    const segProgress = easeInOutSine(Math.max(0, inSeg) / moveEach);
+    const value = ((idx + segProgress) / n) * distance;
+    onFrame(Math.min(distance, value));
+    if (t < 1) raf = requestAnimationFrame(step);
+    else { onFrame(distance); resolveDone(); }
+  };
+  raf = requestAnimationFrame(step);
+
+  return {
+    done,
+    cancel: () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      resolveDone();
+    },
+  };
+}
+
 export function totalDuration(stops: TourStop[]) {
   return stops.filter((s) => s.enabled).reduce((a, s) => a + s.seconds, 0);
 }
+
+export type QualityKey = "hd" | "fhd" | "ultra";
+
+export const QUALITY: Record<QualityKey, {
+  label: string; width: number; height: number; fps: number; videoBps: number;
+}> = {
+  hd: { label: "عادي 720p", width: 1280, height: 720, fps: 30, videoBps: 5_000_000 },
+  fhd: { label: "عالي 1080p", width: 1920, height: 1080, fps: 60, videoBps: 12_000_000 },
+  ultra: { label: "فائق 1440p", width: 2560, height: 1440, fps: 60, videoBps: 20_000_000 },
+};
+
+/** Decode an mp3 data blob just enough to know how long the narration runs. */
+export function audioDuration(url: string): Promise<number> {
+  return new Promise((resolve) => {
+    const a = new Audio();
+    a.preload = "metadata";
+    a.onloadedmetadata = () => resolve(Number.isFinite(a.duration) ? a.duration : 0);
+    a.onerror = () => resolve(0);
+    a.src = url;
+  });
+}
+
+export function base64ToBlobUrl(base64: string, mime: string) {
+  const bin = atob(base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return URL.createObjectURL(new Blob([bytes], { type: mime }));
+}
+
