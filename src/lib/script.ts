@@ -3,7 +3,8 @@
 export type ScriptLocale = "ar" | "en" | "fr";
 
 export const WORDS_PER_SECOND = 2.4;
-export const MIN_VIDEO_SECONDS = 195; // 3:15
+export const MIN_VIDEO_SECONDS = 300; // 5:00
+
 
 export function wordsForSeconds(seconds: number) {
   return Math.round(seconds * WORDS_PER_SECOND);
