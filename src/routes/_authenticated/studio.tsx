@@ -56,7 +56,7 @@ import {
 
 const search = z.object({ url: z.string().optional() }).partial();
 
-export const Route = createFileRoute("/studio")({
+export const Route = createFileRoute("/_authenticated/studio")({
   validateSearch: (s) => search.parse(s),
   head: () => ({
     meta: [
@@ -132,7 +132,7 @@ type Clip = { url: string; seconds: number };
 type RecordResult = { where: "folder" | "download"; audioFailed: boolean };
 
 function StudioPage() {
-  const sp = useSearch({ from: "/studio" });
+  const sp = useSearch({ from: "/_authenticated/studio" });
 
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<Record<string, boolean>>(() =>
