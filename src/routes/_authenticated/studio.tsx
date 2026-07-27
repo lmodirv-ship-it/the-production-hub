@@ -146,7 +146,9 @@ function StudioPage() {
   const [extra, setExtra] = useState("");
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [current, setCurrent] = useState(-1);
+  const currentIndexRef = useRef(-1);
   const [retryItems, setRetryItems] = useState<QueueItem[]>([]);
+
 
   const [quality, setQuality] = useState<QualityKey>("ultra");
   const [voice, setVoice] = useState("alloy");
