@@ -171,6 +171,8 @@ function StudioPage() {
       }
     }
     streamsRef.current.push(display);
+    // jump to the site tab so recording starts on the page itself
+    try { siteWinRef.current?.focus(); } catch { /* cross-origin focus may be blocked */ }
 
     // 2) optional microphone narration mixed with tab audio
     const tracks = [...display.getVideoTracks(), ...display.getAudioTracks()];
