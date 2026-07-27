@@ -1,4 +1,6 @@
-/** Composites the captured screen + a burned-in Arabic caption bar + intro/outro cards onto a canvas. */
+/** Composites the captured screen + a burned-in caption bar + intro/outro cards onto a canvas. */
+
+export type CardLocale = "ar" | "en" | "fr";
 
 export type Card = {
   title: string;
@@ -13,6 +15,7 @@ export type Compositor = {
   setCard: (card: Card | null) => void;
   stop: () => void;
 };
+
 
 function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
   const words = text.split(/\s+/);
