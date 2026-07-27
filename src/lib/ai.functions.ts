@@ -184,16 +184,22 @@ export const captureScreenshots = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<{ shots: string[]; pages: string[]; branding: Branding; content: string; title: string }> => {
     const url = data.url!;
     const key = process.env.FIRECRAWL_API_KEY;
-    if (!key) {
+    const lovableKey = process.env.LOVABLE_API_KEY;
+    if (!key || !lovableKey) {
       return { shots: [], pages: [url], branding: {}, content: "", title: hostnameFromUrl(url) };
     }
 
-    const headers = { Authorization: `Bearer ${key}`, "Content-Type": "application/json" };
+    const FC = "https://connector-gateway.lovable.dev/firecrawl/v2";
+    const headers = {
+      Authorization: `Bearer ${lovableKey}`,
+      "X-Connection-Api-Key": key,
+      "Content-Type": "application/json",
+    };
 
     // 1) Discover internal pages via map
     let pages: string[] = [url];
     try {
-      const mapRes = await fetch("https://api.firecrawl.dev/v2/map", {
+      const mapRes = await fetch(`${FC}/map`, {
         method: "POST", headers,
         body: JSON.stringify({ url, limit: data.count + 3 }),
       });
@@ -217,7 +223,7 @@ export const captureScreenshots = createServerFn({ method: "POST" })
       const formats: unknown[] = ["screenshot"];
       if (isFirst) { formats.push("markdown"); formats.push("branding"); }
       try {
-        const r = await fetch("https://api.firecrawl.dev/v2/scrape", {
+        const r = await fetch(`${FC}/scrape`, {
           method: "POST", headers,
           body: JSON.stringify({ url: pages[i], formats, onlyMainContent: true }),
         });
