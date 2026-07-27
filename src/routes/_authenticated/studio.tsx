@@ -446,7 +446,11 @@ function StudioPage() {
 
   /* ---------------- mp4 ---------------- */
 
-  const convertToMp4 = useCallback(async (blob: Blob): Promise<Blob> => {
+  const convertToMp4 = useCallback(async (chunks: Blob | Blob[]): Promise<Blob> => {
+    const inputChunks = Array.isArray(chunks) ? chunks : [chunks];
+    if (inputChunks.length === 0) return new Blob([], { type: "video/mp4" });
+    if (inputChunks.length === 1 && inputChunks[0].type.startsWith("video/mp4")) return inputChunks[0];
+
     setMessage("جاري التحويل إلى MP4…");
     try {
       const { FFmpeg } = await import("@ffmpeg/ffmpeg");
@@ -457,28 +461,62 @@ function StudioPage() {
         coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript"),
         wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm"),
       });
-      await ffmpeg.writeFile("in.webm", await fetchFile(blob));
-      await ffmpeg.exec([
-        "-i",
-        "in.webm",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        "20",
-        "-pix_fmt",
-        "yuv420p",
-        "-r",
-        String(q.fps),
-        "-c:a",
-        "aac",
-        "-b:a",
-        "192k",
-        "-movflags",
-        "+faststart",
-        "out.mp4",
-      ]);
+
+      for (let i = 0; i < inputChunks.length; i++) {
+        await ffmpeg.writeFile(`chunk${i}.webm`, await fetchFile(inputChunks[i]));
+      }
+
+      if (inputChunks.length === 1) {
+        await ffmpeg.exec([
+          "-i",
+          "chunk0.webm",
+          "-c:v",
+          "libx264",
+          "-preset",
+          "veryfast",
+          "-crf",
+          "20",
+          "-pix_fmt",
+          "yuv420p",
+          "-r",
+          String(q.fps),
+          "-c:a",
+          "aac",
+          "-b:a",
+          "192k",
+          "-movflags",
+          "+faststart",
+          "out.mp4",
+        ]);
+      } else {
+        const list = inputChunks.map((_, i) => `file 'chunk${i}.webm'`).join("\n");
+        await ffmpeg.writeFile("list.txt", list);
+        await ffmpeg.exec([
+          "-f",
+          "concat",
+          "-safe",
+          "0",
+          "-i",
+          "list.txt",
+          "-c:v",
+          "libx264",
+          "-preset",
+          "veryfast",
+          "-crf",
+          "20",
+          "-pix_fmt",
+          "yuv420p",
+          "-r",
+          String(q.fps),
+          "-c:a",
+          "aac",
+          "-b:a",
+          "192k",
+          "-movflags",
+          "+faststart",
+          "out.mp4",
+        ]);
+      }
 
       const data = await ffmpeg.readFile("out.mp4");
       const u8 = data as Uint8Array;
@@ -489,9 +527,10 @@ function StudioPage() {
     } catch (err) {
       console.error("ffmpeg convert failed", err);
       toast.error("تعذّر التحويل إلى MP4 — سيُحفظ الملف كما هو.");
-      return blob;
+      return inputChunks.length === 1 ? inputChunks[0] : new Blob(inputChunks, { type: "video/webm" });
     }
   }, []);
+
 
   /* ---------------- tour ---------------- */
 
