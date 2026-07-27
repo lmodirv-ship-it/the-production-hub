@@ -205,8 +205,9 @@ function StudioPage() {
   useEffect(() => {
     setSelected(loadJSON<Record<string, boolean>>(STORAGE_KEYS.selected, sp.url ? { [sp.url]: true } : {}));
     setExtra(loadJSON<string>(STORAGE_KEYS.extra, ""));
-    setQuality(loadJSON<QualityKey>(STORAGE_KEYS.quality, "fhd"));
+    setQuality(loadJSON<QualityKey>(STORAGE_KEYS.quality, "ultra"));
     setVoice(loadJSON<string>(STORAGE_KEYS.voice, "alloy"));
+    setLocale(loadJSON<NarrationLocale>(STORAGE_KEYS.locale, "ar"));
     setTarget(loadJSON<number>(STORAGE_KEYS.target, MIN_VIDEO_SECONDS));
     setMic(loadJSON<boolean>(STORAGE_KEYS.mic, false));
     if (supportsFolderSave()) {
@@ -218,8 +219,10 @@ function StudioPage() {
   useEffect(() => saveJSON(STORAGE_KEYS.extra, extra), [extra]);
   useEffect(() => saveJSON(STORAGE_KEYS.quality, quality), [quality]);
   useEffect(() => saveJSON(STORAGE_KEYS.voice, voice), [voice]);
+  useEffect(() => saveJSON(STORAGE_KEYS.locale, locale), [locale]);
   useEffect(() => saveJSON(STORAGE_KEYS.target, target), [target]);
   useEffect(() => saveJSON(STORAGE_KEYS.mic, mic), [mic]);
+
 
   useEffect(() => {
     const el = shellRef.current;
