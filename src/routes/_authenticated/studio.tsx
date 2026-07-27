@@ -738,8 +738,10 @@ function StudioPage() {
     setRetryItems([]);
     setRunning(true);
     pausedRef.current = false;
+    shareEndedRef.current = false;
     setPaused(false);
     setMessage("اختر «هذا التبويب» في نافذة المشاركة — مرة واحدة فقط لكل المواقع.");
+
 
 
     let display: MediaStream;
