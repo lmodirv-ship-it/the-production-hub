@@ -644,13 +644,22 @@ function StudioPage() {
         if (activeChunks.length) {
           siteChunks.push(new Blob(activeChunks, { type: mime.split(";")[0] || "video/webm" }));
         }
+        recRef.current = null;
       };
+      recRef.current = rec;
       rec.start(1000);
       activeRec = rec;
       chunkTimer = window.setTimeout(() => {
-        if (activeRec && activeRec.state !== "inactive") activeRec.stop();
+        if (activeRec && activeRec.state !== "inactive") {
+          activeRec.stop();
+          if (!abortRef.current && !skipRef.current) {
+            // restart next chunk unless we're ending
+            setTimeout(() => startChunk(), 50);
+          }
+        }
       }, CHUNK_SECONDS * 1000);
     };
+
 
     const stopChunk = () => {
       window.clearTimeout(chunkTimer);
