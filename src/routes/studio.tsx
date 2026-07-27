@@ -141,27 +141,38 @@ function StudioPage() {
     if (previewUrl) { URL.revokeObjectURL(previewUrl); setPreviewUrl(null); }
     setDownloadName(fileNameFor(url));
 
-    // 1) open the site so the user can pick that tab in the share dialog
-    siteWinRef.current = window.open(url, "_blank", "noopener");
+    // 1) open the site in a new tab, then bring the studio back to front
+    //    so the browser's share-picker dialog is visible right away
+    siteWinRef.current = window.open(url, "_blank");
+    window.focus();
     setMessage("اختر تبويب موقعك في نافذة المشاركة…");
+    await new Promise((r) => setTimeout(r, 500));
 
     let display: MediaStream;
     try {
       display = await navigator.mediaDevices.getDisplayMedia({
         video: { frameRate: 30, width: { ideal: 1920 }, height: { ideal: 1080 }, displaySurface: "browser" },
         audio: true,
-        // record only the chosen tab, never this studio tab (avoids mirror-in-mirror)
+        // offer tabs only, never this studio tab (avoids mirror-in-mirror)
         selfBrowserSurface: "exclude",
-        surfaceSwitching: "exclude",
+        surfaceSwitching: "include",
         preferCurrentTab: false,
       } as DisplayMediaStreamOptions);
     } catch (err) {
       console.error(err);
-      setMessage("تم إلغاء المشاركة. اضغط «ابدأ التسجيل» للمحاولة مجدداً.");
-      toast.error("لم يتم منح إذن مشاركة الشاشة.");
-      return;
+      // Chrome loses the user gesture if the new tab stole focus — retry once
+      try {
+        display = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      } catch (err2) {
+        console.error(err2);
+        setMessage("تم إلغاء المشاركة. اضغط «ابدأ التسجيل» للمحاولة مجدداً.");
+        toast.error("لم يتم منح إذن مشاركة الشاشة.");
+        return;
+      }
     }
     streamsRef.current.push(display);
+    // jump to the site tab so recording starts on the page itself
+    try { siteWinRef.current?.focus(); } catch { /* cross-origin focus may be blocked */ }
 
     // 2) optional microphone narration mixed with tab audio
     const tracks = [...display.getVideoTracks(), ...display.getAudioTracks()];
