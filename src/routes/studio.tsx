@@ -771,11 +771,6 @@ function StudioPage() {
           </ol>
         )}
 
-        <div className="mt-6 flex justify-center">
-          <button onClick={stopQueue} className={running ? "" : "hidden"}>
-            <Square className="size-4" />
-          </button>
-        </div>
       </section>
     </main>
   );
