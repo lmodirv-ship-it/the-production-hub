@@ -711,11 +711,22 @@ function StudioPage() {
       return;
     }
 
+    if (quality === "uhd") {
+      const ok = window.confirm(
+        "4K مكثف جداً للمتصفح وقد يتعطل لمدة طويلة. هل تريد الاستمرار بجودة 4K؟",
+      );
+      if (!ok) {
+        setQuality("ultra");
+        return;
+      }
+    }
+
     setRetryItems([]);
     setRunning(true);
     pausedRef.current = false;
     setPaused(false);
     setMessage("اختر «هذا التبويب» في نافذة المشاركة — مرة واحدة فقط لكل المواقع.");
+
 
     let display: MediaStream;
     try {
