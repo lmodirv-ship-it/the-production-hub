@@ -287,10 +287,20 @@ function StudioPage() {
             <div className="absolute inset-0 grid place-items-center text-center px-6">
               <div className="text-muted-foreground text-sm">
                 <Video className="size-8 mx-auto mb-3 opacity-50" />
-                ستظهر هنا مرآة حيّة لتبويب موقعك أثناء التسجيل.
+                يُسجَّل تبويب موقعك فقط — بدون عرضه هنا حتى لا يتكرر داخل نفسه.
               </div>
             </div>
           )}
+
+          {recording && (
+            <div className="absolute inset-0 grid place-items-center text-center px-6">
+              <div className="text-sm text-muted-foreground">
+                <span className="mx-auto mb-3 block size-3 rounded-full bg-red-500 animate-pulse" />
+                جارٍ تسجيل تبويب موقعك… انتقل إليه وتصفّح، ثم عُد واضغط «إيقاف وتنزيل».
+              </div>
+            </div>
+          )}
+
 
           {busy && (
             <div className="absolute inset-0 grid place-items-center bg-black/70 text-sm">
