@@ -148,12 +148,14 @@ function StudioPage() {
   const [current, setCurrent] = useState(-1);
   const [retryItems, setRetryItems] = useState<QueueItem[]>([]);
 
-  const [quality, setQuality] = useState<QualityKey>("fhd");
+  const [quality, setQuality] = useState<QualityKey>("ultra");
   const [voice, setVoice] = useState("alloy");
+  const [locale, setLocale] = useState<NarrationLocale>("ar");
   const [target, setTarget] = useState(MIN_VIDEO_SECONDS);
   const [depth] = useState(3);
   const [folder, setFolder] = useState("");
   const [mic, setMic] = useState(false);
+
 
   const [running, setRunning] = useState(false);
   const [paused, setPaused] = useState(false);
