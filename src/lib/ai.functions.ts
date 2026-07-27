@@ -199,7 +199,7 @@ export const captureScreenshots = createServerFn({ method: "POST" })
     // 1) Discover internal pages via map
     let pages: string[] = [url];
     try {
-      const mapRes = await fetch("https://api.firecrawl.dev/v2/map", {
+      const mapRes = await fetch(`${FC}/map`, {
         method: "POST", headers,
         body: JSON.stringify({ url, limit: data.count + 3 }),
       });
@@ -223,7 +223,7 @@ export const captureScreenshots = createServerFn({ method: "POST" })
       const formats: unknown[] = ["screenshot"];
       if (isFirst) { formats.push("markdown"); formats.push("branding"); }
       try {
-        const r = await fetch("https://api.firecrawl.dev/v2/scrape", {
+        const r = await fetch(`${FC}/scrape`, {
           method: "POST", headers,
           body: JSON.stringify({ url: pages[i], formats, onlyMainContent: true }),
         });
