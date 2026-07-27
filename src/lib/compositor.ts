@@ -38,6 +38,7 @@ function drawCard(
   height: number,
   card: Card,
   fontSize: number,
+  locale: CardLocale,
 ) {
   const grad = ctx.createLinearGradient(0, 0, width, height);
   if (card.kind === "intro") {
@@ -60,7 +61,7 @@ function drawCard(
 
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.direction = "rtl";
+  ctx.direction = locale === "ar" ? "rtl" : "ltr";
 
   const titleSize = Math.round(height * 0.065);
   ctx.font = `800 ${titleSize}px "Segoe UI", Tahoma, system-ui, sans-serif`;
@@ -79,12 +80,18 @@ function drawCard(
     ctx.fillText(l, width / 2, height * 0.6 + i * (subSize * 1.5));
   });
 
-  const label = card.kind === "intro" ? "جولة تعريفية" : "شكراً للمشاهدة";
+  const labels: Record<CardLocale, { intro: string; outro: string }> = {
+    ar: { intro: "جولة تعريفية", outro: "شكراً للمشاهدة" },
+    en: { intro: "Intro Tour", outro: "Thanks for watching" },
+    fr: { intro: "Visite guidée", outro: "Merci d'avoir regardé" },
+  };
+  const label = labels[locale][card.kind];
   const labelSize = Math.round(height * 0.024);
   ctx.font = `700 ${labelSize}px "Segoe UI", Tahoma, system-ui, sans-serif`;
   ctx.fillStyle = card.kind === "intro" ? "#a78bfa" : "#34d399";
   ctx.fillText(label, width / 2, height * 0.78);
 }
+
 
 export function startCompositor(
   source: MediaStream,
