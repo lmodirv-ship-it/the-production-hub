@@ -148,9 +148,13 @@ function StudioPage() {
     let display: MediaStream;
     try {
       display = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: 30, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        video: { frameRate: 30, width: { ideal: 1920 }, height: { ideal: 1080 }, displaySurface: "browser" },
         audio: true,
-      });
+        // record only the chosen tab, never this studio tab (avoids mirror-in-mirror)
+        selfBrowserSurface: "exclude",
+        surfaceSwitching: "exclude",
+        preferCurrentTab: false,
+      } as DisplayMediaStreamOptions);
     } catch (err) {
       console.error(err);
       setMessage("تم إلغاء المشاركة. اضغط «ابدأ التسجيل» للمحاولة مجدداً.");
@@ -172,10 +176,8 @@ function StudioPage() {
     }
 
     const mixed = new MediaStream(tracks);
-    if (videoRef.current) {
-      videoRef.current.srcObject = new MediaStream(display.getVideoTracks());
-      void videoRef.current.play().catch(() => {});
-    }
+    // no live mirror while recording — showing it here creates the tunnel effect
+    if (videoRef.current) videoRef.current.srcObject = null;
 
     const candidates = [
       "video/mp4;codecs=avc1,mp4a.40.2",
