@@ -98,6 +98,7 @@ export function startCompositor(
   width: number,
   height: number,
   fps: number,
+  locale: CardLocale = "ar",
 ): Compositor {
   const video = document.createElement("video");
   video.srcObject = source;
@@ -129,8 +130,9 @@ export function startCompositor(
     ctx.fillRect(0, 0, width, height);
 
     if (card) {
-      drawCard(ctx, width, height, card, fontSize);
+      drawCard(ctx, width, height, card, fontSize, locale);
     } else {
+
       const vw = video.videoWidth;
       const vh = video.videoHeight;
       if (vw && vh) {
