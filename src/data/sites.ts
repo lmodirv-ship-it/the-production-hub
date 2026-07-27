@@ -194,4 +194,886 @@ export const SITES: SiteEntry[] = [
     description:
       "هو نظام دفع إلكتروني ذكي يستخدم الذكاء الاصطناعي لتحليل سلوك العملاء ومنع الاحتيال، مما يضمن معاملات مالية آمنة وسريعة. يشمل بوابة دفع متكاملة، تتيح للمتاجر قبول المدفوعات عبر البطاقات البنكية والمحافظ الإلكترونية. يتميز بسرعة المعالجة، تقارير تحليلية حول المدفوعات، وإشعارات فورية لكل عملية. كما يتضمن أدوات لإدارة الاشتراكات والفواتير المتكررة، مما يجعله حلاً شاملاً لأصحاب المتاجر الرقمية، مزودي الخدمات، والشركات التي ترغب في نظام دفع آمن وذكي، يوفر حماية لعملائها ويعزز الثقة.",
   },
+  {
+    url: "https://admin.hn-db.fun",
+    name: "admin.hn-db.fun",
+    description:
+      "Tableau de bord administrateur – gestion des utilisateurs, permissions, monitoring. Gestion des utilisateurs, configuration des accès. Contrôle total, sécurité.",
+  },
+  {
+    url: "https://ai.hn-db.fun",
+    name: "ai.hn-db.fun",
+    description:
+      "Interface IA pour l'analyse de données et requêtes intelligentes. Analyse prédictive, requêtes avancées. Rapidité, réduction des erreurs.",
+  },
+  {
+    url: "https://api.hn-db.fun",
+    name: "api.hn-db.fun",
+    description:
+      "API publique pour connecter des applications externes. Intégration, automatisation. Flexibilité, scalabilité.",
+  },
+  {
+    url: "https://api.hn-dbpro.com",
+    name: "api.hn-dbpro.com",
+    description:
+      "Version premium de l'API – performances accrues, support prioritaire. API haute performance, support dédié. Vitesse, stabilité.",
+  },
+  {
+    url: "https://auth.hn-db.fun",
+    name: "auth.hn-db.fun",
+    description:
+      "Service d'authentification centralisé – SSO, gestion des comptes. Connexion unique, sécurité des comptes. Accès sécurisé, simplicité.",
+  },
+  {
+    url: "https://db.hn-createur.com",
+    name: "db.hn-createur.com",
+    description:
+      "Base de données dédiée à la plateforme HN-Createur. Gestion des projets créatifs. Organisation, rapidité d'accès.",
+  },
+  {
+    url: "https://files.hn-db.fun",
+    name: "files.hn-db.fun",
+    description:
+      "Service de gestion et partage sécurisé de fichiers. Stockage, partage, gestion des versions. Sécurité, partage facile.",
+  },
+  {
+    url: "https://hn-bd.online",
+    name: "hn-bd.online",
+    description:
+      "Portail principal de la base de données – requêtes et gestion. Requêtes visuelles, exportation. Simplicité, accès direct.",
+  },
+  {
+    url: "https://hn-db.fun",
+    name: "hn-db.fun",
+    description:
+      "Portail principal de la base de données centralisée HN. Gestion complète, administration. Vue unifiée, contrôle total.",
+  },
+  {
+    url: "https://hn-db.hn-groupe.net",
+    name: "hn-db.hn-groupe.net",
+    description:
+      "Version interne de la base de données accessible via le réseau HN-Groupe. Accès réseau sécurisé. Sécurité, performances.",
+  },
+  {
+    url: "https://hn-dbpro.com",
+    name: "hn-dbpro.com",
+    description:
+      "Version premium de la base de données – support prioritaire. Base de données professionnelle, support dédié. Performance, fiabilité.",
+  },
+  {
+    url: "https://owner.hn-db.fun",
+    name: "owner.hn-db.fun",
+    description:
+      "Espace propriétaire – paramètres globaux, permissions critiques. Supervision, configuration. Contrôle stratégique.",
+  },
+  {
+    url: "https://rule.hn-db.fun",
+    name: "rule.hn-db.fun",
+    description:
+      "Gestion des règles, politiques d'accès et permissions. Définition des règles, conformité. Contrôle total, sécurité.",
+  },
+  {
+    url: "https://status.hn-db.fun",
+    name: "status.hn-db.fun",
+    description:
+      "Page de statut des services – disponibilité et performances. Monitoring, alertes. Transparence, détection précoce.",
+  },
+  {
+    url: "https://users.hn-db.fun",
+    name: "users.hn-db.fun",
+    description:
+      "Gestion des utilisateurs – profils, rôles, activités. Administration des comptes, suivi. Visibilité totale.",
+  },
+  {
+    url: "https://ws.hn-db.fun",
+    name: "ws.hn-db.fun",
+    description:
+      "Service WebSocket pour mises à jour en temps réel. Notifications instantanées, synchronisation. Réactivité, fluidité.",
+  },
+  {
+    url: "https://www.db.hn-createur.com",
+    name: "www.db.hn-createur.com",
+    description:
+      "Version web de la base de données HN-Createur. Accès web, consultation. Accessibilité, simplicité.",
+  },
+  {
+    url: "https://www.hn-bd.online",
+    name: "www.hn-bd.online",
+    description:
+      "Portail public de la base de données. Accès public, documentation. Accessibilité, notoriété.",
+  },
+  {
+    url: "https://www.hn-db.fun",
+    name: "www.hn-db.fun",
+    description:
+      "Portail web principal de la base de données centrale. Interface utilisateur, documentation. Expérience utilisateur optimale.",
+  },
+  {
+    url: "https://www.hn-db.hn-groupe.net",
+    name: "www.hn-db.hn-groupe.net",
+    description:
+      "Version web interne de la base de données. Accès réseau sécurisé. Sécurité, performance.",
+  },
+  {
+    url: "https://www.hn-dbpro.com",
+    name: "www.hn-dbpro.com",
+    description:
+      "Version web de la base de données premium. Accès premium, fonctionnalités avancées. Performance, support dédié.",
+  },
+  {
+    url: "https://adkhar.hn-groupe.net",
+    name: "adkhar.hn-groupe.net",
+    description:
+      "Plateforme d'invocations islamiques (Adhkar). Diffusion des invocations, rappels. Bien-être spirituel.",
+  },
+  {
+    url: "https://ai.hn-groupe.org",
+    name: "ai.hn-groupe.org",
+    description:
+      "Plateforme IA pour l'analyse de données, textes et images. Analyse automatique, génération. Productivité, innovation.",
+  },
+  {
+    url: "https://audit.hn-groupe.net",
+    name: "audit.hn-groupe.net",
+    description:
+      "Outil d'audit et de conformité pour les systèmes internes. Audit, rapports, recommandations. Sécurité, transparence.",
+  },
+  {
+    url: "https://blog.hn-groupe.org",
+    name: "blog.hn-groupe.org",
+    description:
+      "Blog officiel du groupe HN. Publication d'articles, partage. Visibilité, leadership.",
+  },
+  {
+    url: "https://build.hn-groupe.net",
+    name: "build.hn-groupe.net",
+    description:
+      "Environnement de développement pour les nouveaux projets. Développement, tests, déploiement. Innovation, rapidité.",
+  },
+  {
+    url: "https://cinema.hn-groupe.org",
+    name: "cinema.hn-groupe.org",
+    description:
+      "Plateforme cinéma – réservations, programmation. Réservation, gestion des séances. Expérience utilisateur.",
+  },
+  {
+    url: "https://createur.hn-groupe.net",
+    name: "createur.hn-groupe.net",
+    description:
+      "Portail des créateurs – exposition, collaboration. Exposition de projets, mise en réseau. Visibilité, opportunités.",
+  },
+  {
+    url: "https://cv.hn-groupe.org",
+    name: "cv.hn-groupe.org",
+    description:
+      "Outil de création de CV professionnel. Création de CV, export. Professionnalisme, gain de temps.",
+  },
+  {
+    url: "https://film.hn-groupe.net",
+    name: "film.hn-groupe.net",
+    description:
+      "Portail des productions cinématographiques. Présentation des films, gestion. Visibilité, centralisation.",
+  },
+  {
+    url: "https://generatin.hn-groupe.org",
+    name: "generatin.hn-groupe.org",
+    description:
+      "Générateur de contenu automatique par IA. Génération automatique, assistance. Productivité, inspiration.",
+  },
+  {
+    url: "https://goupe-hn.com",
+    name: "goupe-hn.com",
+    description:
+      "Domaine alternatif redirigeant vers HN-Groupe. Redirection, préservation de la marque. Protection de la marque.",
+  },
+  {
+    url: "https://goupe-hn.fun",
+    name: "goupe-hn.fun",
+    description:
+      "Version divertissement du groupe. Jeux, quiz, contenu ludique. Engagement, fidélisation.",
+  },
+  {
+    url: "https://goupe-hn.online",
+    name: "goupe-hn.online",
+    description:
+      "Version allégée du portail principal. Accès rapide, informations concises. Rapidité, simplicité.",
+  },
+  {
+    url: "https://goupe-hn.site",
+    name: "goupe-hn.site",
+    description:
+      "Site vitrine du groupe HN. Présentation, contact. Visibilité, crédibilité.",
+  },
+  {
+    url: "https://groupe-hn.com",
+    name: "groupe-hn.com",
+    description:
+      "Domaine commercial du groupe. Présentation des filiales. Visibilité commerciale.",
+  },
+  {
+    url: "https://hn-groupe.fun",
+    name: "hn-groupe.fun",
+    description:
+      "Portail divertissement – jeux, concours. Divertissement, contenu interactif. Fidélisation, plaisir.",
+  },
+  {
+    url: "https://hn-groupe.net",
+    name: "hn-groupe.net",
+    description:
+      "Portail principal du groupe HN. Administration, services, coordination. Centralisation, professionnalisme.",
+  },
+  {
+    url: "https://hn-groupe.org",
+    name: "hn-groupe.org",
+    description:
+      "Plateforme organisationnelle – projets communautaires. Projets sociaux, éducation. Impact social, engagement.",
+  },
+  {
+    url: "https://hn-groupe.pro",
+    name: "hn-groupe.pro",
+    description:
+      "Version professionnelle – investisseurs. Services B2B, investissements. Crédibilité, développement.",
+  },
+  {
+    url: "https://hn-groupe.site",
+    name: "hn-groupe.site",
+    description:
+      "Site vitrine du groupe. Présentation, contact. Accessibilité, clarté.",
+  },
+  {
+    url: "https://hn-groupe.tech",
+    name: "hn-groupe.tech",
+    description:
+      "Portail technologique – projets, innovation. Développement, solutions logicielles. Innovation, excellence.",
+  },
+  {
+    url: "https://imm.hn-groupe.net",
+    name: "imm.hn-groupe.net",
+    description:
+      "Services immobiliers – annonces, évaluations. Gestion immobilière, mise en relation. Simplicité, efficacité.",
+  },
+  {
+    url: "https://learn.hn-groupe.tech",
+    name: "learn.hn-groupe.tech",
+    description:
+      "Plateforme d'apprentissage – cours tech. Formation, certification. Montée en compétences.",
+  },
+  {
+    url: "https://nawat.hn-groupe.net",
+    name: "nawat.hn-groupe.net",
+    description:
+      "Plateforme des talents et créateurs. Exposition, collaboration. Visibilité, opportunités.",
+  },
+  {
+    url: "https://rfp.hn-groupe.net",
+    name: "rfp.hn-groupe.net",
+    description:
+      "Plateforme d'appels d'offres (RFP). Gestion des propositions. Transparence, concurrence.",
+  },
+  {
+    url: "https://search.hn-groupe.net",
+    name: "search.hn-groupe.net",
+    description:
+      "Moteur de recherche interne du groupe. Recherche, indexation. Gain de temps.",
+  },
+  {
+    url: "https://site.hn-groupe.tech",
+    name: "site.hn-groupe.tech",
+    description:
+      "Site officiel des solutions technologiques. Présentation des solutions. Expertise, crédibilité.",
+  },
+  {
+    url: "https://store.hn-groupe.net",
+    name: "store.hn-groupe.net",
+    description:
+      "Boutique en ligne du groupe. Vente en ligne. Monétisation, visibilité.",
+  },
+  {
+    url: "https://studio.hn-groupe.org",
+    name: "studio.hn-groupe.org",
+    description:
+      "Studio créatif – design, vidéo, montage. Production audiovisuelle. Créativité, professionnalisme.",
+  },
+  {
+    url: "https://tender.hn-groupe.org",
+    name: "tender.hn-groupe.org",
+    description:
+      "Plateforme d'appels d'offres. Gestion des offres. Transparence, professionnalisme.",
+  },
+  {
+    url: "https://www.ai.hn-groupe.org",
+    name: "www.ai.hn-groupe.org",
+    description:
+      "Version principale des services IA. Services IA, analyse. Accessibilité, performance.",
+  },
+  {
+    url: "https://www.audit.hn-groupe.net",
+    name: "www.audit.hn-groupe.net",
+    description:
+      "Version principale de l'outil d'audit. Audit, conformité. Visibilité, transparence.",
+  },
+  {
+    url: "https://www.createur.hn-groupe.net",
+    name: "www.createur.hn-groupe.net",
+    description:
+      "Version principale du portail créateur. Exposition, collaboration. Visibilité, mise en réseau.",
+  },
+  {
+    url: "https://www.film.hn-groupe.net",
+    name: "www.film.hn-groupe.net",
+    description:
+      "Version principale du portail cinéma. Présentation des films. Visibilité, crédibilité.",
+  },
+  {
+    url: "https://www.goupe-hn.com",
+    name: "www.goupe-hn.com",
+    description:
+      "Version principale du domaine alternatif. Redirection. Protection de la marque.",
+  },
+  {
+    url: "https://www.goupe-hn.fun",
+    name: "www.goupe-hn.fun",
+    description:
+      "Version principale du portail divertissement. Divertissement, jeux. Fidélisation, engagement.",
+  },
+  {
+    url: "https://www.goupe-hn.online",
+    name: "www.goupe-hn.online",
+    description:
+      "Version principale du portail allégé. Accès rapide. Rapidité, simplicité.",
+  },
+  {
+    url: "https://www.goupe-hn.site",
+    name: "www.goupe-hn.site",
+    description:
+      "Version principale du site vitrine. Présentation, contact. Visibilité, crédibilité.",
+  },
+  {
+    url: "https://www.groupe-hn.com",
+    name: "www.groupe-hn.com",
+    description:
+      "Version principale du domaine commercial. Présentation des filiales. Visibilité commerciale.",
+  },
+  {
+    url: "https://www.hn-groupe.fun",
+    name: "www.hn-groupe.fun",
+    description:
+      "Version principale du portail divertissement. Jeux, concours. Fidélisation.",
+  },
+  {
+    url: "https://www.hn-groupe.net",
+    name: "www.hn-groupe.net",
+    description:
+      "Version principale du portail HN-Groupe. Gestion, services. Centralisation.",
+  },
+  {
+    url: "https://www.hn-groupe.org",
+    name: "www.hn-groupe.org",
+    description:
+      "Version principale de la plateforme organisationnelle. Projets communautaires. Impact social.",
+  },
+  {
+    url: "https://www.hn-groupe.site",
+    name: "www.hn-groupe.site",
+    description:
+      "Version principale du site vitrine. Présentation, contact. Accessibilité.",
+  },
+  {
+    url: "https://www.hn-groupe.tech",
+    name: "www.hn-groupe.tech",
+    description:
+      "Version principale du portail technologique. Projets technologiques. Innovation, expertise.",
+  },
+  {
+    url: "https://www.nawat.hn-groupe.net",
+    name: "www.nawat.hn-groupe.net",
+    description:
+      "Version principale de la plateforme des talents. Exposition, collaboration. Visibilité, opportunités.",
+  },
+  {
+    url: "https://www.rfp.hn-groupe.net",
+    name: "www.rfp.hn-groupe.net",
+    description:
+      "Version principale de la plateforme RFP. Gestion des appels d'offres. Transparence.",
+  },
+  {
+    url: "https://www.search.hn-groupe.net",
+    name: "www.search.hn-groupe.net",
+    description:
+      "Version principale du moteur de recherche. Recherche, indexation. Gain de temps.",
+  },
+  {
+    url: "https://www.store.hn-groupe.net",
+    name: "www.store.hn-groupe.net",
+    description:
+      "Version principale de la boutique en ligne. Vente en ligne. Monétisation.",
+  },
+  {
+    url: "https://www.tender.hn-groupe.org",
+    name: "www.tender.hn-groupe.org",
+    description:
+      "Version principale de la plateforme d'appels d'offres. Gestion des offres. Transparence, professionnalisme.",
+  },
+  {
+    url: "https://build.hn-createur.com",
+    name: "build.hn-createur.com",
+    description:
+      "Environnement de développement créatif. Développement, tests. Innovation, rapidité.",
+  },
+  {
+    url: "https://cloud.hn-createur.com",
+    name: "cloud.hn-createur.com",
+    description:
+      "Stockage cloud pour créateurs. Stockage, sauvegarde. Sécurité, accessibilité.",
+  },
+  {
+    url: "https://facturation.hn-createur.com",
+    name: "facturation.hn-createur.com",
+    description:
+      "Système de facturation. Gestion des factures. Simplicité, automatisation.",
+  },
+  {
+    url: "https://film.hn-createur.com",
+    name: "film.hn-createur.com",
+    description:
+      "Plateforme des courts-métrages. Présentation, gestion. Visibilité.",
+  },
+  {
+    url: "https://hn-createur.com",
+    name: "hn-createur.com",
+    description:
+      "Portail principal de la plateforme créative. Services créatifs. Créativité, professionnalisme.",
+  },
+  {
+    url: "https://learn.hn-createur.com",
+    name: "learn.hn-createur.com",
+    description:
+      "Plateforme éducative pour créateurs. Formation, perfectionnement. Montée en compétences.",
+  },
+  {
+    url: "https://studio.hn-createur.com",
+    name: "studio.hn-createur.com",
+    description:
+      "Studio créatif intégré. Montage vidéo, design. Qualité professionnelle.",
+  },
+  {
+    url: "https://video.hn-createur.com",
+    name: "video.hn-createur.com",
+    description:
+      "Service de production vidéo. Édition vidéo, effets. Créativité, qualité.",
+  },
+  {
+    url: "https://www.hn-createur.com",
+    name: "www.hn-createur.com",
+    description:
+      "Version principale de la plateforme créative. Services créatifs. Visibilité.",
+  },
+  {
+    url: "https://www.video.hn-createur.com",
+    name: "www.video.hn-createur.com",
+    description:
+      "Version principale du service vidéo. Production vidéo. Qualité, accessibilité.",
+  },
+  {
+    url: "https://admin.hn-driver.com",
+    name: "admin.hn-driver.com",
+    description:
+      "Tableau de bord administrateur. Gestion des chauffeurs. Contrôle total.",
+  },
+  {
+    url: "https://admin.hndriver.company",
+    name: "admin.hndriver.company",
+    description:
+      "Version de secours de l'admin. Gestion des chauffeurs. Continuité.",
+  },
+  {
+    url: "https://call.hndriver.company",
+    name: "call.hndriver.company",
+    description:
+      "Service d'appels. Communication chauffeurs/clients. Réactivité.",
+  },
+  {
+    url: "https://callcentre.hn-driver.com",
+    name: "callcentre.hn-driver.com",
+    description:
+      "Centre d'appels. Support client. Expérience client.",
+  },
+  {
+    url: "https://client.hn-driver.com",
+    name: "client.hn-driver.com",
+    description:
+      "Portail client. Réservation, suivi. Satisfaction client.",
+  },
+  {
+    url: "https://client.hndriver.company",
+    name: "client.hndriver.company",
+    description:
+      "Version de secours du portail client. Réservation, suivi. Continuité.",
+  },
+  {
+    url: "https://delivery.hn-driver.com",
+    name: "delivery.hn-driver.com",
+    description:
+      "Service de livraison. Suivi des colis. Efficacité.",
+  },
+  {
+    url: "https://delivery.hndriver.company",
+    name: "delivery.hndriver.company",
+    description:
+      "Version de secours de la livraison. Suivi des colis. Continuité.",
+  },
+  {
+    url: "https://driver.hn-driver.com",
+    name: "driver.hn-driver.com",
+    description:
+      "Portail chauffeur. Missions, revenus. Transparence.",
+  },
+  {
+    url: "https://driver.hndriver.company",
+    name: "driver.hndriver.company",
+    description:
+      "Version de secours du portail chauffeur. Missions, revenus. Continuité.",
+  },
+  {
+    url: "https://hn-driver.com",
+    name: "hn-driver.com",
+    description:
+      "Portail principal du transport. Réservation, gestion de flotte. Innovation.",
+  },
+  {
+    url: "https://hn-driver.online",
+    name: "hn-driver.online",
+    description:
+      "Version mobile du transport. Réservation, suivi. Accessibilité.",
+  },
+  {
+    url: "https://hn-driver.site",
+    name: "hn-driver.site",
+    description:
+      "Site vitrine du transport. Présentation. Visibilité.",
+  },
+  {
+    url: "https://hndriver.company",
+    name: "hndriver.company",
+    description:
+      "Version de secours du transport. Réservation, gestion. Continuité.",
+  },
+  {
+    url: "https://hndriver.hn-driver.com",
+    name: "hndriver.hn-driver.com",
+    description:
+      "Portail avancé pour chauffeurs. Statistiques, performances. Motivation.",
+  },
+  {
+    url: "https://ride.hn-driver.com",
+    name: "ride.hn-driver.com",
+    description:
+      "Service de réservation de courses. Recherche, réservation. Simplicité.",
+  },
+  {
+    url: "https://stouk.hn-driver.com",
+    name: "stouk.hn-driver.com",
+    description:
+      "Marché interne pour chauffeurs. Offres exclusives. Avantages chauffeurs.",
+  },
+  {
+    url: "https://super.hn-driver.com",
+    name: "super.hn-driver.com",
+    description:
+      "Tableau de bord superviseur. Supervision, rapports. Contrôle.",
+  },
+  {
+    url: "https://www.hn-driver.com",
+    name: "www.hn-driver.com",
+    description:
+      "Version principale du transport. Réservation, gestion. Visibilité.",
+  },
+  {
+    url: "https://www.hn-driver.online",
+    name: "www.hn-driver.online",
+    description:
+      "Version principale mobile. Réservation, suivi. Accessibilité mobile.",
+  },
+  {
+    url: "https://www.hn-driver.site",
+    name: "www.hn-driver.site",
+    description:
+      "Version principale du vitrine. Présentation. Visibilité.",
+  },
+  {
+    url: "https://www.hndriver.company",
+    name: "www.hndriver.company",
+    description:
+      "Version principale de secours. Transport, réservation. Continuité.",
+  },
+  {
+    url: "https://hn-ai.online",
+    name: "hn-ai.online",
+    description:
+      "Portail principal des services IA. Analyse, génération de contenu. Innovation.",
+  },
+  {
+    url: "https://hn-ai.pro",
+    name: "hn-ai.pro",
+    description:
+      "Version professionnelle des services IA. Services avancés. Performance, fiabilité.",
+  },
+  {
+    url: "https://hn-ai.site",
+    name: "hn-ai.site",
+    description:
+      "Vitrine des services IA. Démonstration, formation. Visibilité, pédagogie.",
+  },
+  {
+    url: "https://hn-ai.store",
+    name: "hn-ai.store",
+    description:
+      "Boutique d'applications IA. Vente de solutions. Monétisation.",
+  },
+  {
+    url: "https://hn-chat.com",
+    name: "hn-chat.com",
+    description:
+      "Plateforme de chat intelligent. Chat IA, support. Accessibilité.",
+  },
+  {
+    url: "https://hnapps.store",
+    name: "hnapps.store",
+    description:
+      "Boutique d'applications IA. Vente d'applications. Innovation.",
+  },
+  {
+    url: "https://hnchat.net",
+    name: "hnchat.net",
+    description:
+      "Version alternative du chat. Chat IA, assistance. Expérience utilisateur.",
+  },
+  {
+    url: "https://hnclinik-ai.com",
+    name: "hnclinik-ai.com",
+    description:
+      "Plateforme de consultation médicale IA. Analyse des symptômes. Accès à la santé.",
+  },
+  {
+    url: "https://hnclinik.hn-groupe.net",
+    name: "hnclinik.hn-groupe.net",
+    description:
+      "Version réseau de la clinique IA. Consultation IA. Sécurité réseau.",
+  },
+  {
+    url: "https://www.hn-ai.online",
+    name: "www.hn-ai.online",
+    description:
+      "Version principale du portail IA. Services IA. Visibilité.",
+  },
+  {
+    url: "https://www.hn-ai.pro",
+    name: "www.hn-ai.pro",
+    description:
+      "Version principale professionnelle. Services avancés. Performance.",
+  },
+  {
+    url: "https://www.hn-ai.site",
+    name: "www.hn-ai.site",
+    description:
+      "Version principale de la vitrine. Démonstration. Visibilité.",
+  },
+  {
+    url: "https://www.hn-ai.store",
+    name: "www.hn-ai.store",
+    description:
+      "Version principale de la boutique. Vente de solutions. Monétisation.",
+  },
+  {
+    url: "https://www.hn-chat.com",
+    name: "www.hn-chat.com",
+    description:
+      "Version principale du chat. Chat IA. Accessibilité.",
+  },
+  {
+    url: "https://www.hnapps.store",
+    name: "www.hnapps.store",
+    description:
+      "Version principale de la boutique d'applis. Vente d'applications. Innovation.",
+  },
+  {
+    url: "https://www.hnchat.net",
+    name: "www.hnchat.net",
+    description:
+      "Version principale du chat alternatif. Chat IA. Expérience utilisateur.",
+  },
+  {
+    url: "https://www.hnclinik-ai.com",
+    name: "www.hnclinik-ai.com",
+    description:
+      "Version principale de la clinique IA. Consultation IA. Accès à la santé.",
+  },
+  {
+    url: "https://carwashpro.com",
+    name: "carwashpro.com",
+    description:
+      "Lavage automobile professionnel. Réservation, forfaits. Simplicité, efficacité.",
+  },
+  {
+    url: "https://hiba-eco.com",
+    name: "hiba-eco.com",
+    description:
+      "Plateforme écologique. Projets verts, sensibilisation. Engagement environnemental.",
+  },
+  {
+    url: "https://hn-adkhar.life",
+    name: "hn-adkhar.life",
+    description:
+      "Invocations islamiques. Rappels quotidiens. Bien-être spirituel.",
+  },
+  {
+    url: "https://hn-carwash.online",
+    name: "hn-carwash.online",
+    description:
+      "Lavage auto en ligne. Réservation à domicile. Praticité.",
+  },
+  {
+    url: "https://hn-carwash.site",
+    name: "hn-carwash.site",
+    description:
+      "Vitrine lavage auto. Présentation, tarifs. Visibilité.",
+  },
+  {
+    url: "https://hn-finance.online",
+    name: "hn-finance.online",
+    description:
+      "Portail financier. Budget, investissements. Optimisation.",
+  },
+  {
+    url: "https://hn-finance.site",
+    name: "hn-finance.site",
+    description:
+      "Vitrine financière. Présentation, conseils. Crédibilité.",
+  },
+  {
+    url: "https://hn-immo.com",
+    name: "hn-immo.com",
+    description:
+      "Plateforme immobilière. Annonces, évaluation. Efficacité.",
+  },
+  {
+    url: "https://lavagenizar.com",
+    name: "lavagenizar.com",
+    description:
+      "Service de nettoyage. Réservation, forfaits. Simplicité.",
+  },
+  {
+    url: "https://slavacall-hiba.com",
+    name: "slavacall-hiba.com",
+    description:
+      "Appels audio/vidéo sécurisés. Conférences, enregistrement. Confidentialité.",
+  },
+  {
+    url: "https://slavacall-hiba.online",
+    name: "slavacall-hiba.online",
+    description:
+      "Version web des appels. Appels, partage d'écran. Accessibilité.",
+  },
+  {
+    url: "https://tanjaprint.com",
+    name: "tanjaprint.com",
+    description:
+      "Service d'impression professionnelle. Impression, livraison. Qualité, rapidité.",
+  },
+  {
+    url: "https://tanjaprint.online",
+    name: "tanjaprint.online",
+    description:
+      "Version en ligne de l'impression. Devis, upload, commande. Praticité.",
+  },
+  {
+    url: "https://api.slavacall-hiba.online",
+    name: "api.slavacall-hiba.online",
+    description:
+      "API pour intégration des appels. Intégration, développement. Flexibilité.",
+  },
+  {
+    url: "https://buildcv-ai.online",
+    name: "buildcv-ai.online",
+    description:
+      "Outil IA de création de CV. Création, optimisation. Professionnalisme.",
+  },
+  {
+    url: "https://www.buildcv-ai.online",
+    name: "www.buildcv-ai.online",
+    description:
+      "Version principale du CV IA. Création de CV. Visibilité.",
+  },
+  {
+    url: "https://www.carwashpro.com",
+    name: "www.carwashpro.com",
+    description:
+      "Version principale du lavage auto. Réservation, forfaits. Visibilité.",
+  },
+  {
+    url: "https://www.hiba-eco.com",
+    name: "www.hiba-eco.com",
+    description:
+      "Version principale écologique. Projets verts. Visibilité.",
+  },
+  {
+    url: "https://www.hn-adkhar.life",
+    name: "www.hn-adkhar.life",
+    description:
+      "Version principale des invocations. Invocations, rappels. Visibilité.",
+  },
+  {
+    url: "https://www.hn-carwash.online",
+    name: "www.hn-carwash.online",
+    description:
+      "Version principale du lavage en ligne. Réservation, paiement. Visibilité.",
+  },
+  {
+    url: "https://www.hn-carwash.site",
+    name: "www.hn-carwash.site",
+    description:
+      "Version principale de la vitrine lavage. Présentation, tarifs. Visibilité.",
+  },
+  {
+    url: "https://www.hn-finance.online",
+    name: "www.hn-finance.online",
+    description:
+      "Version principale du portail financier. Budget, investissements. Visibilité.",
+  },
+  {
+    url: "https://www.hn-finance.site",
+    name: "www.hn-finance.site",
+    description:
+      "Version principale de la vitrine financière. Présentation, conseils. Visibilité.",
+  },
+  {
+    url: "https://www.hn-immo.com",
+    name: "www.hn-immo.com",
+    description:
+      "Version principale de l'immobilier. Annonces, évaluation. Visibilité.",
+  },
+  {
+    url: "https://www.lavagenizar.com",
+    name: "www.lavagenizar.com",
+    description:
+      "Version principale du nettoyage. Réservation, forfaits. Visibilité.",
+  },
+  {
+    url: "https://www.slavacall-hiba.online",
+    name: "www.slavacall-hiba.online",
+    description:
+      "Version principale des appels en ligne. Appels, conférences. Visibilité.",
+  },
+  {
+    url: "https://www.tanjaprint.com",
+    name: "www.tanjaprint.com",
+    description:
+      "Version principale de l'impression. Impression, livraison. Visibilité.",
+  },
+  {
+    url: "https://www.tanjaprint.online",
+    name: "www.tanjaprint.online",
+    description:
+      "Version web de l'impression. Devis, upload, commande. Praticité.",
+  },
 ];
