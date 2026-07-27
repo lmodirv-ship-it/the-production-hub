@@ -28,8 +28,12 @@ export function fileNameFor(raw: string) {
 }
 
 export function fmt(sec: number) {
-  const m = Math.floor(sec / 60).toString().padStart(2, "0");
-  const s = Math.floor(sec % 60).toString().padStart(2, "0");
+  const m = Math.floor(sec / 60)
+    .toString()
+    .padStart(2, "0");
+  const s = Math.floor(sec % 60)
+    .toString()
+    .padStart(2, "0");
   return `${m}:${s}`;
 }
 
@@ -130,7 +134,10 @@ export function animateScrollCinematic(
     const value = ((idx + segProgress) / n) * distance;
     onFrame(Math.min(distance, value));
     if (t < 1) raf = requestAnimationFrame(step);
-    else { onFrame(distance); resolveDone(); }
+    else {
+      onFrame(distance);
+      resolveDone();
+    }
   };
   raf = requestAnimationFrame(step);
 
@@ -148,15 +155,34 @@ export function totalDuration(stops: TourStop[]) {
   return stops.filter((s) => s.enabled).reduce((a, s) => a + s.seconds, 0);
 }
 
-export type QualityKey = "hd" | "fhd" | "ultra";
+export type QualityKey = "hd" | "fhd" | "ultra" | "uhd";
 
-export const QUALITY: Record<QualityKey, {
-  label: string; width: number; height: number; fps: number; videoBps: number;
-}> = {
+export const QUALITY: Record<
+  QualityKey,
+  {
+    label: string;
+    width: number;
+    height: number;
+    fps: number;
+    videoBps: number;
+  }
+> = {
   hd: { label: "عادي 720p", width: 1280, height: 720, fps: 30, videoBps: 5_000_000 },
-  fhd: { label: "عالي 1080p", width: 1920, height: 1080, fps: 60, videoBps: 12_000_000 },
-  ultra: { label: "فائق 1440p", width: 2560, height: 1440, fps: 60, videoBps: 20_000_000 },
+  fhd: { label: "عالي 1080p", width: 1920, height: 1080, fps: 60, videoBps: 14_000_000 },
+  ultra: { label: "فائق 1440p", width: 2560, height: 1440, fps: 60, videoBps: 24_000_000 },
+  uhd: { label: "4K 2160p", width: 3840, height: 2160, fps: 60, videoBps: 40_000_000 },
 };
+
+/**
+ * Stretch per-page durations so the whole tour is at least `targetSeconds`.
+ * Never shortens a page below its narration length.
+ */
+export function ensureTotalSeconds(stops: TourStop[], targetSeconds: number): TourStop[] {
+  const total = stops.reduce((a, s) => a + s.seconds, 0);
+  if (total >= targetSeconds || !stops.length) return stops;
+  const extra = (targetSeconds - total) / stops.length;
+  return stops.map((s) => ({ ...s, seconds: Math.round(s.seconds + extra) }));
+}
 
 /** Decode an mp3 data blob just enough to know how long the narration runs. */
 export function audioDuration(url: string): Promise<number> {
@@ -175,4 +201,3 @@ export function base64ToBlobUrl(base64: string, mime: string) {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return URL.createObjectURL(new Blob([bytes], { type: mime }));
 }
-
