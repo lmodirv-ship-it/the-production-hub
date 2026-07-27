@@ -643,9 +643,10 @@ function StudioPage() {
     setMessage(`حفظ ملفات ${item.name}…`);
     const where = await saveFile(finalBlob, `${base}.${ext}`);
     await saveFile(
-      buildDescriptionFile({ name: item.name, url: item.url, seconds: total, script: fullScript }),
+      buildDescriptionFile({ name: item.name, url: item.url, seconds: total, script: fullScript, locale }),
       `${base}.txt`,
     );
+
     if (captions.length) await saveFile(buildSrt(captions), `${base}.srt`);
 
     return { where, audioFailed: ttsFailed || (mic && !micStreamRef.current) };
