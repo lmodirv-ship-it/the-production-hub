@@ -95,6 +95,7 @@ const DURATIONS = [
 
 const INTRO_MS = 3500;
 const OUTRO_MS = 3500;
+const CHUNK_SECONDS = 60;
 
 const STORAGE_KEYS = {
   selected: "eco-selected",
@@ -103,7 +104,9 @@ const STORAGE_KEYS = {
   voice: "eco-voice",
   target: "eco-target",
   mic: "eco-mic",
+  locale: "eco-locale",
 };
+
 
 function loadJSON<T>(key: string, fallback: T): T {
   try {
