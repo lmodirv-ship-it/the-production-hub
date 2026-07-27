@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { SITES } from "@/data/sites";
 import { discoverPages } from "@/lib/pages.functions";
-import { generateLongNarration, synthesizeSpeech } from "@/lib/narration.functions";
+import { generateLongNarration, synthesizeSpeech, type NarrationLocale } from "@/lib/narration.functions";
 import { startCompositor } from "@/lib/compositor";
 import {
   QUALITY,
@@ -34,6 +34,7 @@ import {
   originOf,
   runSinglePageScroll,
   sleep,
+  splitDurationIntoChunks,
   type QualityKey,
   type TourStop,
 } from "@/lib/tour";
@@ -53,6 +54,7 @@ import {
   saveFile,
   supportsFolderSave,
 } from "@/lib/fs-save";
+
 
 const search = z.object({ url: z.string().optional() }).partial();
 
