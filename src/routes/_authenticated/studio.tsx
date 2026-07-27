@@ -301,8 +301,10 @@ function StudioPage() {
         paths,
         totalWords: wordsForSeconds(target),
         description: item.description || undefined,
+        locale,
       },
     });
+
 
     if (narration.fallback) {
       toast.info(`استُخدم سكربت احتياطي لـ ${item.name} بدون ذكاء اصطناعي.`);
