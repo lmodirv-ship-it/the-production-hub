@@ -189,7 +189,9 @@ function StudioPage() {
   }>({ cancel: () => {}, pause: () => {}, resume: () => {} });
   const abortRef = useRef(false);
   const skipRef = useRef(false);
+  const shareEndedRef = useRef(false);
   const pausedRef = useRef(false);
+
   const compositorRef = useRef<ReturnType<typeof startCompositor> | null>(null);
   const recRef = useRef<MediaRecorder | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
