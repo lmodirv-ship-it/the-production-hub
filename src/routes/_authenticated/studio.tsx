@@ -889,6 +889,7 @@ function StudioPage() {
               paths,
               totalWords: wordsForSeconds(target),
               description: items[i].description || undefined,
+              locale,
             },
           });
           const base = safeFileBase(items[i].url);
@@ -898,9 +899,11 @@ function StudioPage() {
               url: items[i].url,
               seconds: target,
               script: n.items.map((x) => x.text).join("\n\n"),
+              locale,
             }),
             `${base}.txt`,
           );
+
           setQueue((prev) =>
             prev.map((p, j) => (j === i ? { ...p, status: "done", note: "نص جاهز" } : p)),
           );
