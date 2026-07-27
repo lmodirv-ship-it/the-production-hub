@@ -705,11 +705,12 @@ function StudioPage() {
       // put the aborted current item and remaining items into retry
       const failed = items.slice(current - 1);
       if (failed.length) {
-        setRetryItems(failed.map((f) => ({ ...f, status: "idle" as const })));
+        setRetryItems(failed.map((f) => ({ ...f, status: "pending" as const, note: "معلّق — أعد البدء" })));
         toast.info("أعد الضغط على «ابدأ» لاستئناف التسجيل من الموقع الحالي.");
       }
       shareEndedRef.current = false;
     }
+
 
   }
 
