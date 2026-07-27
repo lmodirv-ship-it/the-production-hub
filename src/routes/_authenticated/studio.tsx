@@ -570,7 +570,6 @@ function StudioPage() {
     const comp = startCompositor(displayRef.current!, q.width, q.height, q.fps, locale);
     compositorRef.current = comp;
 
-
     const tracks: MediaStreamTrack[] = [
       ...comp.stream.getVideoTracks(),
       ...ensureNarrationTracks(),
@@ -586,24 +585,48 @@ function StudioPage() {
       "video/webm",
     ];
     const mime = candidates.find((m) => MediaRecorder.isTypeSupported(m)) ?? "video/webm";
-    const rec = new MediaRecorder(new MediaStream(tracks), {
-      mimeType: mime,
-      videoBitsPerSecond: q.videoBps,
-      audioBitsPerSecond: 192_000,
-    });
-    recRef.current = rec;
-    const chunks: Blob[] = [];
-    rec.ondataavailable = (e) => {
-      if (e.data.size) chunks.push(e.data);
-    };
-    const stopped = new Promise<void>((r) => {
-      rec.onstop = () => r();
-    });
 
-    rec.start(1000);
+    const siteChunks: Blob[] = [];
+    let activeRec: MediaRecorder | null = null;
+    let activeChunks: Blob[] = [];
+    let chunkTimer = 0;
+
+    const startChunk = () => {
+      activeChunks = [];
+      const rec = new MediaRecorder(new MediaStream(tracks), {
+        mimeType: mime,
+        videoBitsPerSecond: q.videoBps,
+        audioBitsPerSecond: 192_000,
+      });
+      rec.ondataavailable = (e) => {
+        if (e.data.size) activeChunks.push(e.data);
+      };
+      rec.onstop = () => {
+        if (activeChunks.length) {
+          siteChunks.push(new Blob(activeChunks, { type: mime.split(";")[0] || "video/webm" }));
+        }
+      };
+      rec.start(1000);
+      activeRec = rec;
+      chunkTimer = window.setTimeout(() => {
+        if (activeRec && activeRec.state !== "inactive") activeRec.stop();
+      }, CHUNK_SECONDS * 1000);
+    };
+
+    const stopChunk = () => {
+      window.clearTimeout(chunkTimer);
+      if (activeRec && activeRec.state !== "inactive") {
+        activeRec.stop();
+        activeRec = null;
+      }
+    };
+
+    startChunk();
+
     comp.setCard({ title: item.name, subtitle: item.url, kind: "intro" });
     await pauseAwareSleep(INTRO_MS);
     comp.setCard(null);
+
 
     setSeconds(0);
     if (timerRef.current) window.clearInterval(timerRef.current);
