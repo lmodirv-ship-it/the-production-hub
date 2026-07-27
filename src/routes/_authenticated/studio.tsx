@@ -763,8 +763,11 @@ function StudioPage() {
       /* browser picks its best */
     }
     vt.addEventListener("ended", () => {
+      shareEndedRef.current = true;
       abortRef.current = true;
+      toast.error("انتهت مشاركة الشاشة. سأُوقف الحالية وأضعها في قائمة إعادة المحاولة.");
     });
+
 
     if (mic) {
       await startMic();
