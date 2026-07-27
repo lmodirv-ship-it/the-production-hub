@@ -741,6 +741,7 @@ function StudioPage() {
     for (let i = 0; i < items.length; i++) {
       if (abortRef.current) break;
       setCurrent(i);
+      currentIndexRef.current = i;
       setQueue((prev) => prev.map((p, j) => (j === i ? { ...p, status: "running" } : p)));
       try {
         const { where, audioFailed } = await recordOne(items[i]);
@@ -881,6 +882,7 @@ function StudioPage() {
     setRunning(false);
     setPaused(false);
     setCurrent(-1);
+    currentIndexRef.current = -1;
     setFrameSrc("");
     setMessage(abortRef.current ? "تم إيقاف الطابور." : "اكتمل الطابور — كل الفيديوهات والنصوص جاهزة.");
     if (!abortRef.current) toast.success("اكتملت كل الفيديوهات.");
@@ -980,6 +982,7 @@ function StudioPage() {
     try {
       for (let i = 0; i < items.length; i++) {
         setCurrent(i);
+        currentIndexRef.current = i;
         setQueue((prev) => prev.map((p, j) => (j === i ? { ...p, status: "running" } : p)));
         setMessage(`كتابة نص ${items[i].name}…`);
         try {
@@ -1024,7 +1027,8 @@ function StudioPage() {
       setMessage("تم توليد كل النصوص.");
     } finally {
       setTextOnly(false);
-      setCurrent(-1);
+    setCurrent(-1);
+    currentIndexRef.current = -1;
     }
   }
 
