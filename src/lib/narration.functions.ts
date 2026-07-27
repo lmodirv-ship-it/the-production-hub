@@ -3,9 +3,12 @@ import { z } from "zod";
 
 const GATEWAY = "https://ai.gateway.lovable.dev/v1";
 
+export type NarrationLocale = "ar" | "en" | "fr";
+
 const NarrationInput = z.object({
   url: z.string().url(),
   paths: z.array(z.string()).min(1).max(20),
+  locale: z.enum(["ar", "en", "fr"]).default("ar"),
 });
 
 export type NarrationItem = { path: string; text: string };
@@ -19,13 +22,23 @@ function hostOf(url: string) {
   }
 }
 
-function labelOf(path: string) {
+function labelOf(path: string, locale: NarrationLocale) {
   const clean = path
     .replace(/^\//, "")
     .replace(/[-_/]+/g, " ")
     .trim();
-  return clean || "الصفحة الرئيسية";
+  if (!clean) {
+    return locale === "ar" ? "الصفحة الرئيسية" : locale === "fr" ? "Page d'accueil" : "Homepage";
+  }
+  return clean;
 }
+
+function localeVoiceInstructions(locale: NarrationLocale) {
+  if (locale === "fr") return "Parle en français courant, clair et professionnel, à un rythme adapté à une vidéo de présentation.";
+  if (locale === "en") return "Speak in clear, friendly English at a moderate pace suitable for a website walkthrough video.";
+  return "تحدث بالعربية الفصحى بنبرة واضحة وودودة وبإيقاع متوسط مناسب لفيديو تعريفي.";
+}
+
 
 function fallbackNarration(url: string, paths: string[]): NarrationResult {
   const site = hostOf(url);
