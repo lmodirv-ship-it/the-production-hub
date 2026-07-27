@@ -464,9 +464,11 @@ function StudioPage() {
         "-preset",
         "veryfast",
         "-crf",
-        "19",
+        "20",
         "-pix_fmt",
         "yuv420p",
+        "-r",
+        String(q.fps),
         "-c:a",
         "aac",
         "-b:a",
@@ -475,6 +477,7 @@ function StudioPage() {
         "+faststart",
         "out.mp4",
       ]);
+
       const data = await ffmpeg.readFile("out.mp4");
       const u8 = data as Uint8Array;
       return new Blob(
