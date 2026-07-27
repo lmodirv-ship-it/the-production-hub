@@ -779,15 +779,18 @@ function StudioPage() {
       await pauseAwareSleep(800);
     }
 
-    if (shareEndedRef.current && current > 0) {
-      // put the aborted current item and remaining items into retry
-      const failed = items.slice(current - 1);
-      if (failed.length) {
-        setRetryItems(failed.map((f) => ({ ...f, status: "pending" as const, note: "معلّق — أعد البدء" })));
-        toast.info("أعد الضغط على «ابدأ» لاستئناف التسجيل من الموقع الحالي.");
+    if (shareEndedRef.current) {
+      const idx = currentIndexRef.current;
+      if (idx >= 0 && idx < items.length) {
+        const failed = items.slice(idx);
+        if (failed.length) {
+          setRetryItems(failed.map((f) => ({ ...f, status: "pending" as const, note: "معلّق — أعد البدء" })));
+          toast.info("أعد الضغط على «ابدأ» لاستئناف التسجيل من الموقع الحالي.");
+        }
       }
       shareEndedRef.current = false;
     }
+
 
 
   }
