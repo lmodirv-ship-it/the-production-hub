@@ -1,5 +1,7 @@
 /** Script timing helpers: word budget, timed captions, txt/srt builders. */
 
+export type ScriptLocale = "ar" | "en" | "fr";
+
 export const WORDS_PER_SECOND = 2.4;
 export const MIN_VIDEO_SECONDS = 195; // 3:15
 
@@ -70,26 +72,34 @@ export function buildDescriptionFile(opts: {
   url: string;
   seconds: number;
   script: string;
+  locale?: ScriptLocale;
 }) {
+  const locale = opts.locale ?? "ar";
   const mm = Math.floor(opts.seconds / 60);
   const ss = Math.round(opts.seconds % 60)
     .toString()
     .padStart(2, "0");
-  const tags = [opts.name, "HN Groupe", "Lovable", "تطبيق ويب", "شرح موقع", "ذكاء اصطناعي"];
+  const labels = {
+    ar: { title: "جولة تعريفية", link: "الرابط", duration: "المدة", full: "النص الكامل", tags: "وسوم مقترحة", tagList: [opts.name, "HN Groupe", "Lovable", "تطبيق ويب", "شرح موقع", "ذكاء اصطناعي"] },
+    en: { title: "Site Tour", link: "Link", duration: "Duration", full: "Full Script", tags: "Suggested Tags", tagList: [opts.name, "HN Groupe", "Lovable", "web app", "site walkthrough", "AI"] },
+    fr: { title: "Visite guidée", link: "Lien", duration: "Durée", full: "Texte complet", tags: "Tags suggérés", tagList: [opts.name, "HN Groupe", "Lovable", "application web", "présentation site", "IA"] },
+  }[locale];
+
   return [
-    `${opts.name} — جولة تعريفية`,
-    `الرابط: ${opts.url}`,
-    `المدة: ${mm}:${ss}`,
+    `${opts.name} — ${labels.title}`,
+    `${labels.link}: ${opts.url}`,
+    `${labels.duration}: ${mm}:${ss}`,
     "",
-    "— النص الكامل —",
+    `— ${labels.full} —`,
     "",
     opts.script.trim(),
     "",
-    "— وسوم مقترحة —",
-    tags.map((t) => `#${t.replace(/\s+/g, "_")}`).join(" "),
+    `— ${labels.tags} —`,
+    labels.tagList.map((t) => `#${t.replace(/\s+/g, "_")}`).join(" "),
     "",
   ].join("\n");
 }
+
 
 export function safeFileBase(url: string) {
   try {
