@@ -1148,6 +1148,19 @@ function StudioPage() {
                   </select>
                 </div>
                 <div className="mb-3 flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">اللغة</span>
+                  <select
+                    value={locale}
+                    onChange={(e) => setLocale(e.target.value as NarrationLocale)}
+                    className="rounded-lg border border-border bg-card/60 px-2 py-1.5 outline-none focus:border-primary"
+                  >
+                    <option value="ar">العربية</option>
+                    <option value="en">English</option>
+                    <option value="fr">Français</option>
+                  </select>
+                </div>
+                <div className="mb-3 flex items-center justify-between gap-2">
+
                   <span className="text-muted-foreground">
                     <Mic className="inline size-3.5" /> تعليقي بالميكروفون
                   </span>
