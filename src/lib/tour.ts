@@ -279,6 +279,18 @@ export function ensureTotalSeconds(stops: TourStop[], targetSeconds: number): To
   return stops.map((s) => ({ ...s, seconds: Math.round(s.seconds + extra) }));
 }
 
+/**
+ * Split a recording/conversion job into chunks to avoid a single huge
+ * ffmpeg.wasm operation. Returns chunk boundaries in seconds.
+ */
+export function splitDurationIntoChunks(totalSeconds: number, chunkSeconds: number): number[] {
+  const n = Math.ceil(totalSeconds / chunkSeconds);
+  if (n <= 1) return [];
+  const chunks: number[] = [];
+  for (let i = 1; i < n; i++) chunks.push(i * chunkSeconds);
+  return chunks;
+}
+
 /** Decode an mp3 data blob just enough to know how long the narration runs. */
 export function audioDuration(url: string): Promise<number> {
   return new Promise((resolve) => {
@@ -296,3 +308,4 @@ export function base64ToBlobUrl(base64: string, mime: string) {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   return URL.createObjectURL(new Blob([bytes], { type: mime }));
 }
+

@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { SITES } from "@/data/sites";
 import { discoverPages } from "@/lib/pages.functions";
-import { generateLongNarration, synthesizeSpeech } from "@/lib/narration.functions";
+import { generateLongNarration, synthesizeSpeech, type NarrationLocale } from "@/lib/narration.functions";
 import { startCompositor } from "@/lib/compositor";
 import {
   QUALITY,
@@ -34,6 +34,7 @@ import {
   originOf,
   runSinglePageScroll,
   sleep,
+  splitDurationIntoChunks,
   type QualityKey,
   type TourStop,
 } from "@/lib/tour";
@@ -53,6 +54,7 @@ import {
   saveFile,
   supportsFolderSave,
 } from "@/lib/fs-save";
+
 
 const search = z.object({ url: z.string().optional() }).partial();
 
@@ -93,6 +95,7 @@ const DURATIONS = [
 
 const INTRO_MS = 3500;
 const OUTRO_MS = 3500;
+const CHUNK_SECONDS = 60;
 
 const STORAGE_KEYS = {
   selected: "eco-selected",
@@ -101,7 +104,9 @@ const STORAGE_KEYS = {
   voice: "eco-voice",
   target: "eco-target",
   mic: "eco-mic",
+  locale: "eco-locale",
 };
+
 
 function loadJSON<T>(key: string, fallback: T): T {
   try {
@@ -141,14 +146,18 @@ function StudioPage() {
   const [extra, setExtra] = useState("");
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [current, setCurrent] = useState(-1);
+  const currentIndexRef = useRef(-1);
   const [retryItems, setRetryItems] = useState<QueueItem[]>([]);
 
-  const [quality, setQuality] = useState<QualityKey>("fhd");
+
+  const [quality, setQuality] = useState<QualityKey>("ultra");
   const [voice, setVoice] = useState("alloy");
+  const [locale, setLocale] = useState<NarrationLocale>("ar");
   const [target, setTarget] = useState(MIN_VIDEO_SECONDS);
   const [depth] = useState(3);
   const [folder, setFolder] = useState("");
   const [mic, setMic] = useState(false);
+
 
   const [running, setRunning] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -182,7 +191,9 @@ function StudioPage() {
   }>({ cancel: () => {}, pause: () => {}, resume: () => {} });
   const abortRef = useRef(false);
   const skipRef = useRef(false);
+  const shareEndedRef = useRef(false);
   const pausedRef = useRef(false);
+
   const compositorRef = useRef<ReturnType<typeof startCompositor> | null>(null);
   const recRef = useRef<MediaRecorder | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
@@ -198,8 +209,9 @@ function StudioPage() {
   useEffect(() => {
     setSelected(loadJSON<Record<string, boolean>>(STORAGE_KEYS.selected, sp.url ? { [sp.url]: true } : {}));
     setExtra(loadJSON<string>(STORAGE_KEYS.extra, ""));
-    setQuality(loadJSON<QualityKey>(STORAGE_KEYS.quality, "fhd"));
+    setQuality(loadJSON<QualityKey>(STORAGE_KEYS.quality, "ultra"));
     setVoice(loadJSON<string>(STORAGE_KEYS.voice, "alloy"));
+    setLocale(loadJSON<NarrationLocale>(STORAGE_KEYS.locale, "ar"));
     setTarget(loadJSON<number>(STORAGE_KEYS.target, MIN_VIDEO_SECONDS));
     setMic(loadJSON<boolean>(STORAGE_KEYS.mic, false));
     if (supportsFolderSave()) {
@@ -211,8 +223,10 @@ function StudioPage() {
   useEffect(() => saveJSON(STORAGE_KEYS.extra, extra), [extra]);
   useEffect(() => saveJSON(STORAGE_KEYS.quality, quality), [quality]);
   useEffect(() => saveJSON(STORAGE_KEYS.voice, voice), [voice]);
+  useEffect(() => saveJSON(STORAGE_KEYS.locale, locale), [locale]);
   useEffect(() => saveJSON(STORAGE_KEYS.target, target), [target]);
   useEffect(() => saveJSON(STORAGE_KEYS.mic, mic), [mic]);
+
 
   useEffect(() => {
     const el = shellRef.current;
@@ -291,8 +305,10 @@ function StudioPage() {
         paths,
         totalWords: wordsForSeconds(target),
         description: item.description || undefined,
+        locale,
       },
     });
+
 
     if (narration.fallback) {
       toast.info(`استُخدم سكربت احتياطي لـ ${item.name} بدون ذكاء اصطناعي.`);
@@ -315,8 +331,9 @@ function StudioPage() {
       } else {
         try {
           const { audio, mime } = await synthesizeSpeech({
-            data: { text: it.text.slice(0, 1900), voice },
+            data: { text: it.text.slice(0, 1900), voice, locale },
           });
+
           const url = base64ToBlobUrl(audio, mime);
           const dur = await audioDuration(url);
           if (dur > 0) {
@@ -431,7 +448,11 @@ function StudioPage() {
 
   /* ---------------- mp4 ---------------- */
 
-  const convertToMp4 = useCallback(async (blob: Blob): Promise<Blob> => {
+  const convertToMp4 = useCallback(async (chunks: Blob | Blob[]): Promise<Blob> => {
+    const inputChunks = Array.isArray(chunks) ? chunks : [chunks];
+    if (inputChunks.length === 0) return new Blob([], { type: "video/mp4" });
+    if (inputChunks.length === 1 && inputChunks[0].type.startsWith("video/mp4")) return inputChunks[0];
+
     setMessage("جاري التحويل إلى MP4…");
     try {
       const { FFmpeg } = await import("@ffmpeg/ffmpeg");
@@ -442,26 +463,63 @@ function StudioPage() {
         coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript"),
         wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm"),
       });
-      await ffmpeg.writeFile("in.webm", await fetchFile(blob));
-      await ffmpeg.exec([
-        "-i",
-        "in.webm",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-crf",
-        "19",
-        "-pix_fmt",
-        "yuv420p",
-        "-c:a",
-        "aac",
-        "-b:a",
-        "192k",
-        "-movflags",
-        "+faststart",
-        "out.mp4",
-      ]);
+
+      for (let i = 0; i < inputChunks.length; i++) {
+        await ffmpeg.writeFile(`chunk${i}.webm`, await fetchFile(inputChunks[i]));
+      }
+
+      if (inputChunks.length === 1) {
+        await ffmpeg.exec([
+          "-i",
+          "chunk0.webm",
+          "-c:v",
+          "libx264",
+          "-preset",
+          "veryfast",
+          "-crf",
+          "20",
+          "-pix_fmt",
+          "yuv420p",
+          "-r",
+          String(q.fps),
+          "-c:a",
+          "aac",
+          "-b:a",
+          "192k",
+          "-movflags",
+          "+faststart",
+          "out.mp4",
+        ]);
+      } else {
+        const list = inputChunks.map((_, i) => `file 'chunk${i}.webm'`).join("\n");
+        await ffmpeg.writeFile("list.txt", list);
+        await ffmpeg.exec([
+          "-f",
+          "concat",
+          "-safe",
+          "0",
+          "-i",
+          "list.txt",
+          "-c:v",
+          "libx264",
+          "-preset",
+          "veryfast",
+          "-crf",
+          "20",
+          "-pix_fmt",
+          "yuv420p",
+          "-r",
+          String(q.fps),
+          "-c:a",
+          "aac",
+          "-b:a",
+          "192k",
+          "-movflags",
+          "+faststart",
+          "out.mp4",
+        ]);
+      }
+
       const data = await ffmpeg.readFile("out.mp4");
       const u8 = data as Uint8Array;
       return new Blob(
@@ -471,9 +529,10 @@ function StudioPage() {
     } catch (err) {
       console.error("ffmpeg convert failed", err);
       toast.error("تعذّر التحويل إلى MP4 — سيُحفظ الملف كما هو.");
-      return blob;
+      return inputChunks.length === 1 ? inputChunks[0] : new Blob(inputChunks, { type: "video/webm" });
     }
   }, []);
+
 
   /* ---------------- tour ---------------- */
 
@@ -549,7 +608,7 @@ function StudioPage() {
     const { stops, scripts, audioFailed: ttsFailed } = await planSite(item);
     if (abortRef.current || skipRef.current) throw new Error("skip");
 
-    const comp = startCompositor(displayRef.current!, q.width, q.height, q.fps);
+    const comp = startCompositor(displayRef.current!, q.width, q.height, q.fps, locale);
     compositorRef.current = comp;
 
     const tracks: MediaStreamTrack[] = [
@@ -567,24 +626,57 @@ function StudioPage() {
       "video/webm",
     ];
     const mime = candidates.find((m) => MediaRecorder.isTypeSupported(m)) ?? "video/webm";
-    const rec = new MediaRecorder(new MediaStream(tracks), {
-      mimeType: mime,
-      videoBitsPerSecond: q.videoBps,
-      audioBitsPerSecond: 192_000,
-    });
-    recRef.current = rec;
-    const chunks: Blob[] = [];
-    rec.ondataavailable = (e) => {
-      if (e.data.size) chunks.push(e.data);
-    };
-    const stopped = new Promise<void>((r) => {
-      rec.onstop = () => r();
-    });
 
-    rec.start(1000);
+    const siteChunks: Blob[] = [];
+    let activeRec: MediaRecorder | null = null;
+    let activeChunks: Blob[] = [];
+    let chunkTimer = 0;
+
+    const startChunk = () => {
+      activeChunks = [];
+      const rec = new MediaRecorder(new MediaStream(tracks), {
+        mimeType: mime,
+        videoBitsPerSecond: q.videoBps,
+        audioBitsPerSecond: 192_000,
+      });
+      rec.ondataavailable = (e) => {
+        if (e.data.size) activeChunks.push(e.data);
+      };
+      rec.onstop = () => {
+        if (activeChunks.length) {
+          siteChunks.push(new Blob(activeChunks, { type: mime.split(";")[0] || "video/webm" }));
+        }
+        recRef.current = null;
+      };
+      recRef.current = rec;
+      rec.start(1000);
+      activeRec = rec;
+      chunkTimer = window.setTimeout(() => {
+        if (activeRec && activeRec.state !== "inactive") {
+          activeRec.stop();
+          if (!abortRef.current && !skipRef.current) {
+            // restart next chunk unless we're ending
+            setTimeout(() => startChunk(), 50);
+          }
+        }
+      }, CHUNK_SECONDS * 1000);
+    };
+
+
+    const stopChunk = () => {
+      window.clearTimeout(chunkTimer);
+      if (activeRec && activeRec.state !== "inactive") {
+        activeRec.stop();
+        activeRec = null;
+      }
+    };
+
+    startChunk();
+
     comp.setCard({ title: item.name, subtitle: item.url, kind: "intro" });
     await pauseAwareSleep(INTRO_MS);
     comp.setCard(null);
+
 
     setSeconds(0);
     if (timerRef.current) window.clearInterval(timerRef.current);
@@ -603,8 +695,9 @@ function StudioPage() {
       await pauseAwareSleep(OUTRO_MS);
       comp.setCard(null);
       await pauseAwareSleep(600);
-      if (rec.state !== "inactive") rec.stop();
-      await stopped;
+      stopChunk();
+      // wait for the last onstop to flush
+      await new Promise<void>((r) => setTimeout(r, 1200));
       if (timerRef.current) {
         window.clearInterval(timerRef.current);
         timerRef.current = null;
@@ -616,8 +709,10 @@ function StudioPage() {
 
     if (abortRef.current || skipRef.current) throw new Error("skip");
 
-    const raw = new Blob(chunks, { type: mime.split(";")[0] || "video/webm" });
-    const finalBlob = mime.startsWith("video/mp4") ? raw : await convertToMp4(raw);
+    const finalBlob =
+      siteChunks.length === 1 && mime.startsWith("video/mp4")
+        ? siteChunks[0]
+        : await convertToMp4(siteChunks);
     const base = safeFileBase(item.url);
     const ext = finalBlob.type === "video/mp4" ? "mp4" : "webm";
     const fullScript = scripts.map((s) => s.text).join("\n\n");
@@ -626,13 +721,15 @@ function StudioPage() {
     setMessage(`حفظ ملفات ${item.name}…`);
     const where = await saveFile(finalBlob, `${base}.${ext}`);
     await saveFile(
-      buildDescriptionFile({ name: item.name, url: item.url, seconds: total, script: fullScript }),
+      buildDescriptionFile({ name: item.name, url: item.url, seconds: total, script: fullScript, locale }),
       `${base}.txt`,
     );
+
     if (captions.length) await saveFile(buildSrt(captions), `${base}.srt`);
 
     return { where, audioFailed: ttsFailed || (mic && !micStreamRef.current) };
   }
+
 
   /* ---------------- queue ---------------- */
 
@@ -644,6 +741,7 @@ function StudioPage() {
     for (let i = 0; i < items.length; i++) {
       if (abortRef.current) break;
       setCurrent(i);
+      currentIndexRef.current = i;
       setQueue((prev) => prev.map((p, j) => (j === i ? { ...p, status: "running" } : p)));
       try {
         const { where, audioFailed } = await recordOne(items[i]);
@@ -680,6 +778,21 @@ function StudioPage() {
       }
       await pauseAwareSleep(800);
     }
+
+    if (shareEndedRef.current) {
+      const idx = currentIndexRef.current;
+      if (idx >= 0 && idx < items.length) {
+        const failed = items.slice(idx);
+        if (failed.length) {
+          setRetryItems(failed.map((f) => ({ ...f, status: "pending" as const, note: "معلّق — أعد البدء" })));
+          toast.info("أعد الضغط على «ابدأ» لاستئناف التسجيل من الموقع الحالي.");
+        }
+      }
+      shareEndedRef.current = false;
+    }
+
+
+
   }
 
   async function startQueue() {
@@ -693,11 +806,24 @@ function StudioPage() {
       return;
     }
 
+    if (quality === "uhd") {
+      const ok = window.confirm(
+        "4K مكثف جداً للمتصفح وقد يتعطل لمدة طويلة. هل تريد الاستمرار بجودة 4K؟",
+      );
+      if (!ok) {
+        setQuality("ultra");
+        return;
+      }
+    }
+
     setRetryItems([]);
     setRunning(true);
     pausedRef.current = false;
+    shareEndedRef.current = false;
     setPaused(false);
     setMessage("اختر «هذا التبويب» في نافذة المشاركة — مرة واحدة فقط لكل المواقع.");
+
+
 
     let display: MediaStream;
     try {
@@ -732,8 +858,11 @@ function StudioPage() {
       /* browser picks its best */
     }
     vt.addEventListener("ended", () => {
+      shareEndedRef.current = true;
       abortRef.current = true;
+      toast.error("انتهت مشاركة الشاشة. سأُوقف الحالية وأضعها في قائمة إعادة المحاولة.");
     });
+
 
     if (mic) {
       await startMic();
@@ -756,6 +885,7 @@ function StudioPage() {
     setRunning(false);
     setPaused(false);
     setCurrent(-1);
+    currentIndexRef.current = -1;
     setFrameSrc("");
     setMessage(abortRef.current ? "تم إيقاف الطابور." : "اكتمل الطابور — كل الفيديوهات والنصوص جاهزة.");
     if (!abortRef.current) toast.success("اكتملت كل الفيديوهات.");
@@ -855,6 +985,7 @@ function StudioPage() {
     try {
       for (let i = 0; i < items.length; i++) {
         setCurrent(i);
+        currentIndexRef.current = i;
         setQueue((prev) => prev.map((p, j) => (j === i ? { ...p, status: "running" } : p)));
         setMessage(`كتابة نص ${items[i].name}…`);
         try {
@@ -871,6 +1002,7 @@ function StudioPage() {
               paths,
               totalWords: wordsForSeconds(target),
               description: items[i].description || undefined,
+              locale,
             },
           });
           const base = safeFileBase(items[i].url);
@@ -880,9 +1012,11 @@ function StudioPage() {
               url: items[i].url,
               seconds: target,
               script: n.items.map((x) => x.text).join("\n\n"),
+              locale,
             }),
             `${base}.txt`,
           );
+
           setQueue((prev) =>
             prev.map((p, j) => (j === i ? { ...p, status: "done", note: "نص جاهز" } : p)),
           );
@@ -896,7 +1030,8 @@ function StudioPage() {
       setMessage("تم توليد كل النصوص.");
     } finally {
       setTextOnly(false);
-      setCurrent(-1);
+    setCurrent(-1);
+    currentIndexRef.current = -1;
     }
   }
 
@@ -1127,6 +1262,19 @@ function StudioPage() {
                   </select>
                 </div>
                 <div className="mb-3 flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">اللغة</span>
+                  <select
+                    value={locale}
+                    onChange={(e) => setLocale(e.target.value as NarrationLocale)}
+                    className="rounded-lg border border-border bg-card/60 px-2 py-1.5 outline-none focus:border-primary"
+                  >
+                    <option value="ar">العربية</option>
+                    <option value="en">English</option>
+                    <option value="fr">Français</option>
+                  </select>
+                </div>
+                <div className="mb-3 flex items-center justify-between gap-2">
+
                   <span className="text-muted-foreground">
                     <Mic className="inline size-3.5" /> تعليقي بالميكروفون
                   </span>
