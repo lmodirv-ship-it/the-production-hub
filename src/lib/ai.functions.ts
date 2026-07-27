@@ -184,11 +184,17 @@ export const captureScreenshots = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<{ shots: string[]; pages: string[]; branding: Branding; content: string; title: string }> => {
     const url = data.url!;
     const key = process.env.FIRECRAWL_API_KEY;
-    if (!key) {
+    const lovableKey = process.env.LOVABLE_API_KEY;
+    if (!key || !lovableKey) {
       return { shots: [], pages: [url], branding: {}, content: "", title: hostnameFromUrl(url) };
     }
 
-    const headers = { Authorization: `Bearer ${key}`, "Content-Type": "application/json" };
+    const FC = "https://connector-gateway.lovable.dev/firecrawl/v2";
+    const headers = {
+      Authorization: `Bearer ${lovableKey}`,
+      "X-Connection-Api-Key": key,
+      "Content-Type": "application/json",
+    };
 
     // 1) Discover internal pages via map
     let pages: string[] = [url];
