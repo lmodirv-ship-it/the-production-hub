@@ -1133,6 +1133,7 @@ function StudioPage() {
               }}
             >
               <iframe
+                key={frameKey}
                 ref={iframeRef}
                 src={frameSrc || "about:blank"}
                 title="tour"
