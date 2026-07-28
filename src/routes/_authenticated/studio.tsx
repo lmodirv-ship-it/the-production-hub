@@ -1356,9 +1356,37 @@ function StudioPage() {
         {/* queue progress */}
         {queue.length > 0 && (
           <div className="mt-6 rounded-2xl border border-border bg-card/40 p-4">
-            <p className="mb-3 text-xs text-muted-foreground">
-              التقدّم: {Math.max(0, current + 1)} من {queue.length}
-            </p>
+            <div className="mb-4">
+              <div className="mb-2 flex items-baseline justify-between">
+                <p className="text-xs text-muted-foreground">
+                  التقدّم: {Math.max(0, current + 1)} من {stats.total}
+                </p>
+                <p className="text-sm font-bold text-primary">{percent}%</p>
+              </div>
+              <div className="h-2.5 w-full overflow-hidden rounded-full bg-background/60">
+                <div
+                  className="h-full rounded-full bg-gradient-hero transition-all duration-500"
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+                {[
+                  { label: "منتهية", value: stats.done, cls: "text-primary" },
+                  { label: "قيد العمل", value: stats.runningCount, cls: "text-primary" },
+                  { label: "في الانتظار", value: stats.pending, cls: "text-muted-foreground" },
+                  { label: "فاشلة", value: stats.failed, cls: "text-destructive" },
+                  { label: "متخطّاة", value: stats.skipped, cls: "text-muted-foreground" },
+                ].map((s) => (
+                  <div
+                    key={s.label}
+                    className="rounded-xl border border-border/60 bg-background/40 px-3 py-2 text-center"
+                  >
+                    <p className={`text-lg font-bold ${s.cls}`}>{s.value}</p>
+                    <p className="text-[10px] text-muted-foreground">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
             <ul className="grid gap-1.5 sm:grid-cols-2">
               {queue.map((qi, i) => (
                 <li
