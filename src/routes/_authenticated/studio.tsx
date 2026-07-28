@@ -180,6 +180,7 @@ function StudioPage() {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const loadedSrcRef = useRef("");
   const narrationElRef = useRef<HTMLAudioElement | null>(null);
   const displayRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -568,19 +569,20 @@ function StudioPage() {
       setFade(true);
       setOffset(0);
       setFrameState("loading");
-      setFrameSrc(`${origin}${stop.path}`);
-      const loaded = await Promise.race([
-        new Promise<boolean>((r) => {
-          const el = iframeRef.current;
-          if (!el) return r(false);
-          const on = () => {
-            el.removeEventListener("load", on);
-            r(true);
-          };
-          el.addEventListener("load", on);
-        }),
-        pauseAwareSleep(EMBED_TIMEOUT_MS).then(() => false),
-      ]);
+      const wanted = `${origin}${stop.path}`;
+      loadedSrcRef.current = "";
+      setFrameSrc(wanted);
+      // poll the ref set by the iframe onLoad handler — avoids the listener race
+      const deadline = performance.now() + EMBED_TIMEOUT_MS;
+      let loaded = false;
+      while (performance.now() < deadline) {
+        if (abortRef.current || skipRef.current) break;
+        if (loadedSrcRef.current === wanted) {
+          loaded = true;
+          break;
+        }
+        await pauseAwareSleep(100);
+      }
       if (abortRef.current || skipRef.current) break;
       if (!loaded) {
         setFrameState("blocked");
@@ -588,6 +590,7 @@ function StudioPage() {
         continue;
       }
       setFrameState("ready");
+
       setFade(false);
       // let the site paint its first frames before we start moving
       await pauseAwareSleep(900);
@@ -1135,15 +1138,18 @@ function StudioPage() {
                 opacity: fade ? 0 : 1,
               }}
             >
-              {frameSrc ? (
-                <iframe
-                  ref={iframeRef}
-                  src={frameSrc}
-                  title="tour"
-                  className="border-0"
-                  style={{ width: q.width, height: tall, transform: `translateY(${-offset}px)` }}
-                />
-              ) : null}
+              <iframe
+                ref={iframeRef}
+                src={frameSrc || "about:blank"}
+                title="tour"
+                className="border-0"
+                onLoad={() => {
+                  if (!frameSrc) return;
+                  loadedSrcRef.current = frameSrc;
+                  setFrameState("ready");
+                }}
+                style={{ width: q.width, height: tall, transform: `translateY(${-offset}px)` }}
+              />
             </div>
           </div>
 
