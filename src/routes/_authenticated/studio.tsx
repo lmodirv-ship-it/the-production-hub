@@ -1076,18 +1076,20 @@ function StudioPage() {
       </header>
 
       <section className="mx-auto w-[92%] pb-16">
-        {/* stage — 90% of the screen */}
+        {/* stage — TV screen */}
+        <div className={running ? "" : "tv-set mx-auto w-[90vw] max-w-[1600px]"}>
         <div
           ref={stageRef}
           className={`relative mx-auto overflow-hidden bg-black ${
             running
               ? "fixed inset-0 z-50 w-screen rounded-none"
-              : "w-[90vw] max-w-[1600px] rounded-2xl border border-border aspect-video"
+              : "tv-screen w-full aspect-video"
           }`}
         >
-          <div ref={shellRef} className="relative h-full w-full overflow-hidden">
+          <div ref={shellRef} className="relative h-full w-full overflow-hidden" style={{ contain: "layout paint size" }}>
             <div
-              className="absolute left-0 top-0 origin-top-left overflow-hidden transition-opacity duration-500"
+              className={`absolute left-0 top-0 origin-top-left overflow-hidden ${running ? "" : "transition-opacity duration-500"}`}
+
               style={{
                 width: q.width,
                 height: q.height,
