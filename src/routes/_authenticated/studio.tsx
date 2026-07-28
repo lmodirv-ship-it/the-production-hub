@@ -565,22 +565,30 @@ function StudioPage() {
       currentPageTextRef.current = scripts.find((s) => s.path === stop.path)?.text ?? "";
       setFade(true);
       setOffset(0);
+      setFrameState("loading");
       setFrameSrc(`${origin}${stop.path}`);
-      await Promise.race([
-        new Promise<void>((r) => {
+      const loaded = await Promise.race([
+        new Promise<boolean>((r) => {
           const el = iframeRef.current;
-          if (!el) return r();
+          if (!el) return r(false);
           const on = () => {
             el.removeEventListener("load", on);
-            r();
+            r(true);
           };
           el.addEventListener("load", on);
         }),
-        pauseAwareSleep(7000),
+        pauseAwareSleep(EMBED_TIMEOUT_MS).then(() => false),
       ]);
       if (abortRef.current || skipRef.current) break;
-      setFade(false);
-      await pauseAwareSleep(500);
+      if (!loaded) {
+        setFrameState("blocked");
+        if (i === 0) throw new Error("embed-blocked");
+        continue;
+      }
+      setFrameState("ready");
+      // let the site paint its first frames before we start moving
+      await pauseAwareSleep(900);
+
       if (abortRef.current || skipRef.current) break;
 
       currentPageEndRef.current = secondsRef.current + stop.seconds;
