@@ -96,7 +96,7 @@ const DURATIONS = [
 const INTRO_MS = 3500;
 const OUTRO_MS = 3500;
 const CHUNK_SECONDS = 60;
-const EMBED_TIMEOUT_MS = 8000;
+
 
 
 const STORAGE_KEYS = {
@@ -171,6 +171,7 @@ function StudioPage() {
 
   const [frameSrc, setFrameSrc] = useState("");
   const [frameState, setFrameState] = useState<"idle" | "loading" | "ready" | "blocked">("idle");
+  const [frameKey, setFrameKey] = useState(0);
   const [activeItem, setActiveItem] = useState<{ name: string; url: string; description?: string } | null>(null);
   const [offset, setOffset] = useState(0);
   const [fade, setFade] = useState(false);
@@ -571,29 +572,22 @@ function StudioPage() {
       setFrameState("loading");
       const wanted = `${origin}${stop.path}`;
       loadedSrcRef.current = "";
+      setFrameKey((k) => k + 1);
       setFrameSrc(wanted);
-      // poll the ref set by the iframe onLoad handler — avoids the listener race
-      const deadline = performance.now() + EMBED_TIMEOUT_MS;
-      let loaded = false;
-      while (performance.now() < deadline) {
+
+      // soft wait: start as soon as the frame reports load, otherwise continue anyway
+      const softDeadline = performance.now() + 2500;
+      while (performance.now() < softDeadline) {
         if (abortRef.current || skipRef.current) break;
-        if (loadedSrcRef.current === wanted) {
-          loaded = true;
-          break;
-        }
+        if (loadedSrcRef.current === wanted) break;
         await pauseAwareSleep(100);
       }
       if (abortRef.current || skipRef.current) break;
-      if (!loaded) {
-        setFrameState("blocked");
-        if (i === 0) throw new Error("embed-blocked");
-        continue;
-      }
-      setFrameState("ready");
 
       setFade(false);
       // let the site paint its first frames before we start moving
       await pauseAwareSleep(900);
+
 
 
       if (abortRef.current || skipRef.current) break;
@@ -1139,6 +1133,7 @@ function StudioPage() {
               }}
             >
               <iframe
+                key={frameKey}
                 ref={iframeRef}
                 src={frameSrc || "about:blank"}
                 title="tour"
@@ -1162,25 +1157,8 @@ function StudioPage() {
             </div>
           )}
 
-          {/* loading / blocked poster — replaces the black seconds at the start of every site */}
-          {running && activeItem && frameState !== "ready" && (
-            <div className="absolute inset-0 grid place-items-center bg-gradient-hero px-10 text-center">
-              <div className="max-w-3xl">
-                <p className="text-3xl font-black text-primary-foreground md:text-5xl">
-                  {activeItem.name}
-                </p>
-                <p className="mt-3 text-base text-primary-foreground/80 md:text-xl">{activeItem.url}</p>
-                {activeItem.description && (
-                  <p className="mt-6 text-sm leading-8 text-primary-foreground/90 md:text-lg">
-                    {activeItem.description}
-                  </p>
-                )}
-                <p className="mt-8 text-xs text-primary-foreground/70">
-                  {frameState === "blocked" ? "هذا الموقع يمنع التضمين" : "جارٍ تحميل الموقع…"}
-                </p>
-              </div>
-            </div>
-          )}
+
+
 
           {!frameSrc && !busy && !running && (
             <div className="absolute inset-0 grid place-items-center text-center px-6">
@@ -1195,14 +1173,7 @@ function StudioPage() {
             <div className="absolute top-3 right-3 flex items-center gap-2 rounded-full bg-black/70 px-3 py-1.5 text-xs text-white">
               <span className="size-2 animate-pulse rounded-full bg-red-500" />
               {fmt(seconds)} · {stageLabel}
-              <span className="opacity-70">
-                ·{" "}
-                {frameState === "ready"
-                  ? "يسجّل"
-                  : frameState === "blocked"
-                    ? "ممنوع التضمين"
-                    : "جارٍ التحميل"}
-              </span>
+              <span className="opacity-70">· يسجّل</span>
             </div>
           )}
 
