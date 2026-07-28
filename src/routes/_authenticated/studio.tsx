@@ -96,6 +96,8 @@ const DURATIONS = [
 const INTRO_MS = 3500;
 const OUTRO_MS = 3500;
 const CHUNK_SECONDS = 60;
+const EMBED_TIMEOUT_MS = 8000;
+
 
 const STORAGE_KEYS = {
   selected: "eco-selected",
@@ -168,9 +170,12 @@ function StudioPage() {
   const [stageLabel, setStageLabel] = useState("");
 
   const [frameSrc, setFrameSrc] = useState("");
+  const [frameState, setFrameState] = useState<"idle" | "loading" | "ready" | "blocked">("idle");
+  const [activeItem, setActiveItem] = useState<{ name: string; url: string; description?: string } | null>(null);
   const [offset, setOffset] = useState(0);
   const [fade, setFade] = useState(false);
   const [scale, setScale] = useState(1);
+
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
@@ -231,11 +236,18 @@ function StudioPage() {
   useEffect(() => {
     const el = shellRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setScale(el.clientWidth / q.width));
+    // preview: fit by width. recording: cover the whole surface so no black bars remain.
+    const compute = () => {
+      const byW = el.clientWidth / q.width;
+      const byH = el.clientHeight / q.height;
+      setScale(running ? Math.max(byW, byH) : byW);
+    };
+    const ro = new ResizeObserver(compute);
     ro.observe(el);
-    setScale(el.clientWidth / q.width);
+    compute();
     return () => ro.disconnect();
-  }, [q.width]);
+  }, [q.width, q.height, running]);
+
 
   useEffect(() => {
     return () => {
@@ -555,22 +567,32 @@ function StudioPage() {
       currentPageTextRef.current = scripts.find((s) => s.path === stop.path)?.text ?? "";
       setFade(true);
       setOffset(0);
+      setFrameState("loading");
       setFrameSrc(`${origin}${stop.path}`);
-      await Promise.race([
-        new Promise<void>((r) => {
+      const loaded = await Promise.race([
+        new Promise<boolean>((r) => {
           const el = iframeRef.current;
-          if (!el) return r();
+          if (!el) return r(false);
           const on = () => {
             el.removeEventListener("load", on);
-            r();
+            r(true);
           };
           el.addEventListener("load", on);
         }),
-        pauseAwareSleep(7000),
+        pauseAwareSleep(EMBED_TIMEOUT_MS).then(() => false),
       ]);
       if (abortRef.current || skipRef.current) break;
+      if (!loaded) {
+        setFrameState("blocked");
+        if (i === 0) throw new Error("embed-blocked");
+        continue;
+      }
+      setFrameState("ready");
       setFade(false);
-      await pauseAwareSleep(500);
+      // let the site paint its first frames before we start moving
+      await pauseAwareSleep(900);
+
+
       if (abortRef.current || skipRef.current) break;
 
       currentPageEndRef.current = secondsRef.current + stop.seconds;
@@ -605,8 +627,11 @@ function StudioPage() {
   /* ---------------- one site ---------------- */
 
   async function recordOne(item: QueueItem): Promise<RecordResult> {
+    setActiveItem(item);
+    setFrameState("loading");
     const { stops, scripts, audioFailed: ttsFailed } = await planSite(item);
     if (abortRef.current || skipRef.current) throw new Error("skip");
+
 
     const comp = startCompositor(displayRef.current!, q.width, q.height, q.fps, locale);
     compositorRef.current = comp;
@@ -771,10 +796,17 @@ function StudioPage() {
           skipRef.current = false;
         } else {
           console.error(e);
+          const blocked = e instanceof Error && e.message === "embed-blocked";
+          if (blocked) toast.error(`${items[i].name}: الموقع يمنع التضمين — سيُعاد لاحقاً.`);
           setQueue((prev) =>
-            prev.map((p, j) => (j === i ? { ...p, status: "failed", note: "تعذّر التسجيل" } : p)),
+            prev.map((p, j) =>
+              j === i
+                ? { ...p, status: "failed", note: blocked ? "الموقع يمنع التضمين" : "تعذّر التسجيل" }
+                : p,
+            ),
           );
         }
+
       }
       await pauseAwareSleep(800);
     }
@@ -870,12 +902,15 @@ function StudioPage() {
 
     if (stageRef.current) {
       try {
-        await stageRef.current.requestFullscreen();
+        await stageRef.current.requestFullscreen({ navigationUI: "hide" } as FullscreenOptions);
       } catch {
         /* windowed is fine */
       }
-      await sleep(500);
+      await sleep(700);
     }
+    toast.info("اطوِ شريط مشاركة Chrome بسهم الطيّ — لا يظهر داخل الفيديو على أي حال.", {
+      duration: 6000,
+    });
 
     await runQueue(items);
 
@@ -887,6 +922,9 @@ function StudioPage() {
     setCurrent(-1);
     currentIndexRef.current = -1;
     setFrameSrc("");
+    setFrameState("idle");
+    setActiveItem(null);
+
     setMessage(abortRef.current ? "تم إيقاف الطابور." : "اكتمل الطابور — كل الفيديوهات والنصوص جاهزة.");
     if (!abortRef.current) toast.success("اكتملت كل الفيديوهات.");
   }
@@ -1118,7 +1156,27 @@ function StudioPage() {
             </div>
           )}
 
-          {!frameSrc && !busy && (
+          {/* loading / blocked poster — replaces the black seconds at the start of every site */}
+          {running && activeItem && frameState !== "ready" && (
+            <div className="absolute inset-0 grid place-items-center bg-gradient-hero px-10 text-center">
+              <div className="max-w-3xl">
+                <p className="text-3xl font-black text-primary-foreground md:text-5xl">
+                  {activeItem.name}
+                </p>
+                <p className="mt-3 text-base text-primary-foreground/80 md:text-xl">{activeItem.url}</p>
+                {activeItem.description && (
+                  <p className="mt-6 text-sm leading-8 text-primary-foreground/90 md:text-lg">
+                    {activeItem.description}
+                  </p>
+                )}
+                <p className="mt-8 text-xs text-primary-foreground/70">
+                  {frameState === "blocked" ? "هذا الموقع يمنع التضمين" : "جارٍ تحميل الموقع…"}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {!frameSrc && !busy && !running && (
             <div className="absolute inset-0 grid place-items-center text-center px-6">
               <div className="text-sm text-muted-foreground">
                 <Video className="mx-auto mb-3 size-8 opacity-50" />
@@ -1131,8 +1189,17 @@ function StudioPage() {
             <div className="absolute top-3 right-3 flex items-center gap-2 rounded-full bg-black/70 px-3 py-1.5 text-xs text-white">
               <span className="size-2 animate-pulse rounded-full bg-red-500" />
               {fmt(seconds)} · {stageLabel}
+              <span className="opacity-70">
+                ·{" "}
+                {frameState === "ready"
+                  ? "يسجّل"
+                  : frameState === "blocked"
+                    ? "ممنوع التضمين"
+                    : "جارٍ التحميل"}
+              </span>
             </div>
           )}
+
 
           {!running && <div className="tv-glare pointer-events-none absolute inset-0" />}
         </div>
