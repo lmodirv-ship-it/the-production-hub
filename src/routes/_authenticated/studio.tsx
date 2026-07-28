@@ -902,12 +902,15 @@ function StudioPage() {
 
     if (stageRef.current) {
       try {
-        await stageRef.current.requestFullscreen();
+        await stageRef.current.requestFullscreen({ navigationUI: "hide" } as FullscreenOptions);
       } catch {
         /* windowed is fine */
       }
-      await sleep(500);
+      await sleep(700);
     }
+    toast.info("اطوِ شريط مشاركة Chrome بسهم الطيّ — لا يظهر داخل الفيديو على أي حال.", {
+      duration: 6000,
+    });
 
     await runQueue(items);
 
@@ -919,6 +922,9 @@ function StudioPage() {
     setCurrent(-1);
     currentIndexRef.current = -1;
     setFrameSrc("");
+    setFrameState("idle");
+    setActiveItem(null);
+
     setMessage(abortRef.current ? "تم إيقاف الطابور." : "اكتمل الطابور — كل الفيديوهات والنصوص جاهزة.");
     if (!abortRef.current) toast.success("اكتملت كل الفيديوهات.");
   }
