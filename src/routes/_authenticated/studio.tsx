@@ -569,19 +569,20 @@ function StudioPage() {
       setFade(true);
       setOffset(0);
       setFrameState("loading");
-      setFrameSrc(`${origin}${stop.path}`);
-      const loaded = await Promise.race([
-        new Promise<boolean>((r) => {
-          const el = iframeRef.current;
-          if (!el) return r(false);
-          const on = () => {
-            el.removeEventListener("load", on);
-            r(true);
-          };
-          el.addEventListener("load", on);
-        }),
-        pauseAwareSleep(EMBED_TIMEOUT_MS).then(() => false),
-      ]);
+      const wanted = `${origin}${stop.path}`;
+      loadedSrcRef.current = "";
+      setFrameSrc(wanted);
+      // poll the ref set by the iframe onLoad handler — avoids the listener race
+      const deadline = performance.now() + EMBED_TIMEOUT_MS;
+      let loaded = false;
+      while (performance.now() < deadline) {
+        if (abortRef.current || skipRef.current) break;
+        if (loadedSrcRef.current === wanted) {
+          loaded = true;
+          break;
+        }
+        await pauseAwareSleep(100);
+      }
       if (abortRef.current || skipRef.current) break;
       if (!loaded) {
         setFrameState("blocked");
@@ -589,6 +590,7 @@ function StudioPage() {
         continue;
       }
       setFrameState("ready");
+
       setFade(false);
       // let the site paint its first frames before we start moving
       await pauseAwareSleep(900);
