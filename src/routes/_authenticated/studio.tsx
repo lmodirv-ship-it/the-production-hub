@@ -180,6 +180,7 @@ function StudioPage() {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const loadedSrcRef = useRef("");
   const narrationElRef = useRef<HTMLAudioElement | null>(null);
   const displayRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
