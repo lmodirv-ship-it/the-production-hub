@@ -571,29 +571,22 @@ function StudioPage() {
       setFrameState("loading");
       const wanted = `${origin}${stop.path}`;
       loadedSrcRef.current = "";
+      setFrameKey((k) => k + 1);
       setFrameSrc(wanted);
-      // poll the ref set by the iframe onLoad handler — avoids the listener race
-      const deadline = performance.now() + EMBED_TIMEOUT_MS;
-      let loaded = false;
-      while (performance.now() < deadline) {
+
+      // soft wait: start as soon as the frame reports load, otherwise continue anyway
+      const softDeadline = performance.now() + 2500;
+      while (performance.now() < softDeadline) {
         if (abortRef.current || skipRef.current) break;
-        if (loadedSrcRef.current === wanted) {
-          loaded = true;
-          break;
-        }
+        if (loadedSrcRef.current === wanted) break;
         await pauseAwareSleep(100);
       }
       if (abortRef.current || skipRef.current) break;
-      if (!loaded) {
-        setFrameState("blocked");
-        if (i === 0) throw new Error("embed-blocked");
-        continue;
-      }
-      setFrameState("ready");
 
       setFade(false);
       // let the site paint its first frames before we start moving
       await pauseAwareSleep(900);
+
 
 
       if (abortRef.current || skipRef.current) break;
