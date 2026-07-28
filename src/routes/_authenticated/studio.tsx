@@ -818,14 +818,15 @@ function StudioPage() {
     if (shareEndedRef.current) {
       const idx = currentIndexRef.current;
       if (idx >= 0 && idx < items.length) {
-        const failed = items.slice(idx);
-        if (failed.length) {
-          setRetryItems(failed.map((f) => ({ ...f, status: "pending" as const, note: "معلّق — أعد البدء" })));
-          toast.info("أعد الضغط على «ابدأ» لاستئناف التسجيل من الموقع الحالي.");
+        const rest = items.slice(idx).map((f) => ({ ...f, status: "pending" as const, note: "معلّق — استئناف تلقائي" }));
+        if (rest.length) {
+          setRetryItems(rest);
+          pendingResumeRef.current = rest;
         }
       }
       shareEndedRef.current = false;
     }
+
 
 
 
