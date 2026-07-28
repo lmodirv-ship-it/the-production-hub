@@ -850,7 +850,7 @@ function StudioPage() {
     pausedRef.current = false;
     shareEndedRef.current = false;
     setPaused(false);
-    setMessage("اختر «هذا التبويب» في نافذة المشاركة — مرة واحدة فقط لكل المواقع.");
+    setMessage("سيطلب Chrome مشاركة التبويب. اختر هذا التبويب ثم اضغط Autoriser — مرة واحدة فقط.");
 
 
 
@@ -1367,6 +1367,14 @@ function StudioPage() {
                 )}
               </div>
 
+              <div className="rounded-xl border border-primary/40 bg-primary/10 p-3 text-xs text-primary-foreground">
+                <p className="mb-1 font-semibold">⚠️ ملاحظة مهمة قبل التسجيل</p>
+                <p className="leading-5">
+                  عند الضغط على «ابدأ التسجيل المتواصل»، سيظهر إشعار من Chrome نفسه: <strong>«Autoriser … à voir cet onglet»</strong>.
+                  اختر <strong>«هذا التبويب»</strong> ثم اضغط <strong>Autoriser</strong> — هذا الإشعار إجباري من المتصفح و<strong>لن يظهر في الفيديو</strong>.
+                </p>
+              </div>
+
               <button
                 onClick={() => void startQueue()}
                 disabled={busy}
@@ -1487,7 +1495,8 @@ function StudioPage() {
             <li>اختر مواقعك (أو «اختيار الكل») وألصق أي موقع جديد في الخانة السفلية.</li>
             <li>اختر مجلد الحفظ مرة واحدة — بعدها تُحفظ كل الملفات فيه تلقائياً.</li>
             <li>
-              اضغط «ابدأ التسجيل المتواصل» واختر «هذا التبويب» في نافذة المشاركة (مرة واحدة فقط).
+              اضغط «ابدأ التسجيل المتواصل» — سيظهر إشعار من Chrome: اختر «هذا التبويب» ثم اضغط Autoriser (مرة واحدة).
+              هذا الإشعار إجباري من المتصفح و<strong>لا يظهر في الفيديو</strong>.
             </li>
             <li>
               كل موقع: جولة ≥ ٣ دقائق + تعليق صوتي + نص أسفل الفيديو، ثم MP4 و TXT و SRT باسم
