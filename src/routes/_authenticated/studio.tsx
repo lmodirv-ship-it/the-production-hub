@@ -168,9 +168,12 @@ function StudioPage() {
   const [stageLabel, setStageLabel] = useState("");
 
   const [frameSrc, setFrameSrc] = useState("");
+  const [frameState, setFrameState] = useState<"idle" | "loading" | "ready" | "blocked">("idle");
+  const [activeItem, setActiveItem] = useState<{ name: string; url: string; description?: string } | null>(null);
   const [offset, setOffset] = useState(0);
   const [fade, setFade] = useState(false);
   const [scale, setScale] = useState(1);
+
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
