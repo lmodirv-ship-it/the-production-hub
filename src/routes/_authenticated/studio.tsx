@@ -200,6 +200,13 @@ function StudioPage() {
   const skipRef = useRef(false);
   const shareEndedRef = useRef(false);
   const pausedRef = useRef(false);
+  const autoResumeAttemptsRef = useRef(0);
+  const autoResumeTimerRef = useRef<number | null>(null);
+  const pendingResumeRef = useRef<QueueItem[] | null>(null);
+  const startQueueRef = useRef<(items?: QueueItem[]) => Promise<void>>(async () => {});
+  const [resumeIn, setResumeIn] = useState(0);
+  const [needsManualResume, setNeedsManualResume] = useState(false);
+
 
   const compositorRef = useRef<ReturnType<typeof startCompositor> | null>(null);
   const recRef = useRef<MediaRecorder | null>(null);
