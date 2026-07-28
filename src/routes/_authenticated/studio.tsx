@@ -20,6 +20,7 @@ import {
   Mic,
 } from "lucide-react";
 import { SITES } from "@/data/sites";
+import { LANGS, applyDocumentLang, dirOf, tr, type Lang } from "@/lib/i18n";
 import { discoverPages } from "@/lib/pages.functions";
 import { generateLongNarration, synthesizeSpeech, type NarrationLocale } from "@/lib/narration.functions";
 import { startCompositor } from "@/lib/compositor";
@@ -81,17 +82,13 @@ export const Route = createFileRoute("/_authenticated/studio")({
 });
 
 const VOICES = [
-  { id: "alloy", label: "هادئ" },
-  { id: "verse", label: "حيوي" },
-  { id: "sage", label: "رصين" },
-  { id: "coral", label: "دافئ" },
+  { id: "alloy", key: "voiceCalm" as const },
+  { id: "verse", key: "voiceLively" as const },
+  { id: "sage", key: "voiceSerious" as const },
+  { id: "coral", key: "voiceWarm" as const },
 ];
 
-const DURATIONS = [
-  { s: MIN_VIDEO_SECONDS, label: "٥ دقائق" },
-  { s: 360, label: "٦ دقائق" },
-  { s: 240, label: "٤ دقائق" },
-];
+const DURATIONS = [MIN_VIDEO_SECONDS, 360, 240];
 
 const INTRO_MS = 3500;
 const OUTRO_MS = 3500;
@@ -164,7 +161,7 @@ function StudioPage() {
   const [running, setRunning] = useState(false);
   const [paused, setPaused] = useState(false);
   const [textOnly, setTextOnly] = useState(false);
-  const [message, setMessage] = useState("اختر مواقعك من القائمة ثم اضغط «ابدأ التسجيل المتواصل».");
+  const [message, setMessage] = useState("");
   const [seconds, setSeconds] = useState(0);
   const [caption, setCaption] = useState("");
   const [stageLabel, setStageLabel] = useState("");
@@ -216,6 +213,18 @@ function StudioPage() {
   const captionsRef = useRef<TimedCaption[]>([]);
   const currentPageTextRef = useRef("");
   const currentPageEndRef = useRef(0);
+
+  const lang = locale as Lang;
+  const t = useMemo(() => tr(lang), [lang]);
+  const dir = dirOf(lang);
+
+  useEffect(() => {
+    applyDocumentLang(lang);
+  }, [lang]);
+
+  useEffect(() => {
+    setMessage((m) => (m ? m : t.msgIdle));
+  }, [t]);
 
   const q = useMemo(() => QUALITY[quality], [quality]);
   const tall = q.height * depth;
@@ -312,7 +321,7 @@ function StudioPage() {
   /* ---------------- narration helpers ---------------- */
 
   async function planSite(item: QueueItem) {
-    setMessage(`اكتشاف صفحات ${item.name}…`);
+    setMessage(t.msgDiscover(item.name));
     let paths: string[] = ["/"];
     try {
       const res = await discoverPages({ data: { url: item.url } });
@@ -321,7 +330,7 @@ function StudioPage() {
       /* single page tour */
     }
 
-    setMessage(`كتابة النص (${wordsForSeconds(target)} كلمة) لـ ${item.name}…`);
+    setMessage(t.msgWriting(wordsForSeconds(target), item.name));
     const narration = await generateLongNarration({
       data: {
         url: item.url,
@@ -334,7 +343,7 @@ function StudioPage() {
 
 
     if (narration.fallback) {
-      toast.info(`استُخدم سكربت احتياطي لـ ${item.name} بدون ذكاء اصطناعي.`);
+      toast.info(t.tFallback(item.name));
     }
 
     Object.values(clipsRef.current).forEach((c) => URL.revokeObjectURL(c.url));
@@ -345,7 +354,7 @@ function StudioPage() {
     for (let i = 0; i < narration.items.length; i++) {
       if (abortRef.current || skipRef.current) break;
       const it = narration.items[i];
-      setMessage(`توليد الصوت ${i + 1}/${narration.items.length} — ${item.name}`);
+      setMessage(t.msgVoice(i + 1, narration.items.length, item.name));
       let secs = Math.max(12, Math.ceil(it.text.length / 14));
 
       if (mic) {
@@ -440,7 +449,7 @@ function StudioPage() {
       return stream;
     } catch (e) {
       console.error(e);
-      toast.error("لم يُسمح بالميكروفون — سيتم التسجيل بدون صوتك.");
+      toast.error(t.tMicDenied);
       setMic(false);
       return null;
     }
@@ -476,7 +485,7 @@ function StudioPage() {
     if (inputChunks.length === 0) return new Blob([], { type: "video/mp4" });
     if (inputChunks.length === 1 && inputChunks[0].type.startsWith("video/mp4")) return inputChunks[0];
 
-    setMessage("جاري التحويل إلى MP4…");
+    setMessage(t.msgConverting);
     try {
       const { FFmpeg } = await import("@ffmpeg/ffmpeg");
       const { fetchFile, toBlobURL } = await import("@ffmpeg/util");
@@ -716,7 +725,7 @@ function StudioPage() {
       secondsRef.current += 1;
       setSeconds((s) => s + 1);
     }, 1000);
-    setMessage(`جارٍ تصوير ${item.name} — لا تلمس شيئاً.`);
+    setMessage(t.msgShooting(item.name));
 
     let captions: TimedCaption[] = [];
     try {
@@ -749,7 +758,7 @@ function StudioPage() {
     const fullScript = scripts.map((s) => s.text).join("\n\n");
     const total = stops.reduce((a, s) => a + s.seconds, 0) + Math.round((INTRO_MS + OUTRO_MS) / 1000);
 
-    setMessage(`حفظ ملفات ${item.name}…`);
+    setMessage(t.msgSaving(item.name));
     const where = await saveFile(finalBlob, `${base}.${ext}`);
     await saveFile(
       buildDescriptionFile({ name: item.name, url: item.url, seconds: total, script: fullScript, locale }),
@@ -783,31 +792,31 @@ function StudioPage() {
                   ...p,
                   status: "done",
                   note: audioFailed
-                    ? "تم الحفظ (بدون تعليق صوتي)"
+                    ? t.noteSavedNoAudio
                     : where === "folder"
-                      ? "حُفظ في المجلد"
-                      : "نزل للتنزيلات",
+                      ? t.noteSavedFolder
+                      : t.noteDownloaded,
                 }
               : p,
           ),
         );
         if (audioFailed) {
-          toast.warning(`تم تسجيل ${items[i].name} بدون تعليق صوتي.`);
+          toast.warning(t.tNoAudio(items[i].name));
         }
       } catch (e) {
         if (skipRef.current) {
           setQueue((prev) =>
-            prev.map((p, j) => (j === i ? { ...p, status: "skipped", note: "تم تخطّيه" } : p)),
+            prev.map((p, j) => (j === i ? { ...p, status: "skipped", note: t.noteSkipped } : p)),
           );
           skipRef.current = false;
         } else {
           console.error(e);
           const blocked = e instanceof Error && e.message === "embed-blocked";
-          if (blocked) toast.error(`${items[i].name}: الموقع يمنع التضمين — سيُعاد لاحقاً.`);
+          if (blocked) toast.error(t.tBlocked(items[i].name));
           setQueue((prev) =>
             prev.map((p, j) =>
               j === i
-                ? { ...p, status: "failed", note: blocked ? "الموقع يمنع التضمين" : "تعذّر التسجيل" }
+                ? { ...p, status: "failed", note: blocked ? t.noteBlocked : t.noteFailed }
                 : p,
             ),
           );
@@ -820,7 +829,7 @@ function StudioPage() {
     if (shareEndedRef.current) {
       const idx = currentIndexRef.current;
       if (idx >= 0 && idx < items.length) {
-        const rest = items.slice(idx).map((f) => ({ ...f, status: "pending" as const, note: "معلّق — استئناف تلقائي" }));
+        const rest = items.slice(idx).map((f) => ({ ...f, status: "pending" as const, note: t.notePendingResume }));
         if (rest.length) {
           setRetryItems(rest);
           pendingResumeRef.current = rest;
@@ -845,7 +854,7 @@ function StudioPage() {
   function scheduleAutoResume(items: QueueItem[]) {
     if (autoResumeAttemptsRef.current >= 5) {
       setNeedsManualResume(true);
-      setMessage("توقّف التسجيل — اضغط «استئناف» للمتابعة من نفس الموقع.");
+      setMessage(t.msgStoppedManual);
       return;
     }
     const attempt = autoResumeAttemptsRef.current;
@@ -855,13 +864,13 @@ function StudioPage() {
     setNeedsManualResume(false);
     let left = delay;
     setResumeIn(left);
-    setMessage(`استئناف تلقائي خلال ${left} ثوانٍ…`);
+    setMessage(t.msgAutoResume(left));
     cancelAutoResume();
     autoResumeTimerRef.current = window.setInterval(() => {
       left -= 1;
       setResumeIn(left);
       if (left > 0) {
-        setMessage(`استئناف تلقائي خلال ${left} ثوانٍ…`);
+        setMessage(t.msgAutoResume(left));
         return;
       }
       cancelAutoResume();
@@ -876,18 +885,16 @@ function StudioPage() {
     setNeedsManualResume(false);
     const items = resumeWith?.length ? resumeWith : retryItems.length ? retryItems : buildQueue();
     if (!items.length) {
-      toast.error("اختر موقعاً واحداً على الأقل.");
+      toast.error(t.tPickOne);
       return;
     }
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getDisplayMedia) {
-      toast.error("متصفحك لا يدعم التسجيل. استخدم Chrome أو Edge على الحاسوب.");
+      toast.error(t.tNoSupport);
       return;
     }
 
     if (!resumeWith && quality === "uhd") {
-      const ok = window.confirm(
-        "4K مكثف جداً للمتصفح وقد يتعطل لمدة طويلة. هل تريد الاستمرار بجودة 4K؟",
-      );
+      const ok = window.confirm(t.tConfirm4k);
       if (!ok) {
         setQuality("ultra");
         return;
@@ -903,7 +910,7 @@ function StudioPage() {
     userStoppedRef.current = false;
     abortRef.current = false;
     setPaused(false);
-    setMessage("سيطلب Chrome مشاركة التبويب. اختر هذا التبويب ثم اضغط Autoriser — مرة واحدة فقط.");
+    setMessage(t.msgSharing);
 
     let display: MediaStream;
     try {
@@ -927,9 +934,9 @@ function StudioPage() {
         setRetryItems(resumeWith);
         pendingResumeRef.current = resumeWith;
         setNeedsManualResume(true);
-        setMessage("المتصفح يحتاج نقرة لإعادة المشاركة — اضغط «استئناف» للمتابعة من نفس الموقع.");
+        setMessage(t.msgNeedsClick);
       } else {
-        setMessage("تم إلغاء المشاركة. اضغط «ابدأ» للمحاولة مجدداً.");
+        setMessage(t.msgShareCancelled);
       }
       return;
     }
@@ -983,8 +990,8 @@ function StudioPage() {
     }
 
     autoResumeAttemptsRef.current = 0;
-    setMessage(abortRef.current ? "تم إيقاف الطابور." : "اكتمل الطابور — كل الفيديوهات والنصوص جاهزة.");
-    if (!abortRef.current) toast.success("اكتملت كل الفيديوهات.");
+    setMessage(abortRef.current ? t.msgQueueStopped : t.msgQueueDone);
+    if (!abortRef.current) toast.success(t.tAllDone);
   }
 
   startQueueRef.current = startQueue;
@@ -1040,7 +1047,7 @@ function StudioPage() {
     clearCaptionTimers();
     compositorRef.current?.setCaption("");
     setCaption("");
-    setMessage("تم الإيقاف المؤقت — اضغط متابعة للاستئناف.");
+    setMessage(t.msgPaused);
   }
 
   function resumeQueue() {
@@ -1062,13 +1069,13 @@ function StudioPage() {
     if (remaining > 0 && currentPageTextRef.current && captionsRef.current) {
       scheduleCaptions(currentPageTextRef.current, remaining, secondsRef.current, captionsRef.current);
     }
-    setMessage("جارٍ الاستئناف…");
+    setMessage(t.msgResuming);
   }
 
   async function retryFailed() {
     const failed = queue.filter((p) => p.status === "failed");
     if (!failed.length) {
-      toast.error("لا يوجد مواقع فاشلة لإعادة المحاولة.");
+      toast.error(t.tNoFailed);
       return;
     }
     setRetryItems(failed.map((p) => ({ ...p, status: "pending" as QueueStatus, note: "" })));
@@ -1081,7 +1088,7 @@ function StudioPage() {
   async function generateTextsOnly() {
     const items = buildQueue();
     if (!items.length) {
-      toast.error("اختر أو ألصق موقعاً واحداً على الأقل.");
+      toast.error(t.tPickOrPaste);
       return;
     }
     setTextOnly(true);
@@ -1091,7 +1098,7 @@ function StudioPage() {
         setCurrent(i);
         currentIndexRef.current = i;
         setQueue((prev) => prev.map((p, j) => (j === i ? { ...p, status: "running" } : p)));
-        setMessage(`كتابة نص ${items[i].name}…`);
+        setMessage(t.msgWritingText(items[i].name));
         try {
           let paths = ["/"];
           try {
@@ -1122,16 +1129,16 @@ function StudioPage() {
           );
 
           setQueue((prev) =>
-            prev.map((p, j) => (j === i ? { ...p, status: "done", note: "نص جاهز" } : p)),
+            prev.map((p, j) => (j === i ? { ...p, status: "done", note: t.noteTextReady } : p)),
           );
         } catch (e) {
           console.error(e);
           setQueue((prev) =>
-            prev.map((p, j) => (j === i ? { ...p, status: "failed", note: "تعذّر التوليد" } : p)),
+            prev.map((p, j) => (j === i ? { ...p, status: "failed", note: t.noteGenFailed } : p)),
           );
         }
       }
-      setMessage("تم توليد كل النصوص.");
+      setMessage(t.msgTextsDone);
     } finally {
       setTextOnly(false);
     setCurrent(-1);
@@ -1145,9 +1152,9 @@ function StudioPage() {
     try {
       const n = await pickFolder();
       setFolder(n);
-      toast.success(`سيتم الحفظ في مجلد ${n}`);
+      toast.success(t.tFolderSet(n));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "تعذّر اختيار المجلد.");
+      toast.error(e instanceof Error ? e.message : t.tFolderError);
     }
   }
 
@@ -1166,7 +1173,7 @@ function StudioPage() {
   const percent = stats.total ? Math.round((finished / stats.total) * 100) : 0;
 
   return (
-    <main className="min-h-screen grid-bg">
+    <main dir={dir} className="min-h-screen grid-bg">
       <audio ref={narrationElRef} className="hidden" />
 
       <header className="mx-auto flex w-[92%] items-center justify-between py-4">
@@ -1176,7 +1183,22 @@ function StudioPage() {
           </div>
           <span className="text-lg font-bold">Eco AI</span>
         </Link>
-        <span className="text-xs text-muted-foreground">طابور تسجيل → MP4 + نص</span>
+        <div className="flex items-center gap-3">
+          <div className="flex rounded-lg border border-border bg-card/60 p-0.5">
+            {LANGS.map((l) => (
+              <button
+                key={l.id}
+                onClick={() => setLocale(l.id as NarrationLocale)}
+                className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition ${
+                  lang === l.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+          <span className="hidden text-xs text-muted-foreground sm:inline">{t.headerTagline}</span>
+        </div>
       </header>
 
       <section className="mx-auto w-[92%] pb-16">
@@ -1233,7 +1255,7 @@ function StudioPage() {
             <div className="absolute inset-0 grid place-items-center text-center px-6">
               <div className="text-sm text-muted-foreground">
                 <Video className="mx-auto mb-3 size-8 opacity-50" />
-                ستُعرض هنا جولة كل موقع أثناء التصوير.
+                {t.stageIdle}
               </div>
             </div>
           )}
@@ -1242,7 +1264,7 @@ function StudioPage() {
             <div className="absolute top-3 right-3 flex items-center gap-2 rounded-full bg-black/70 px-3 py-1.5 text-xs text-white">
               <span className="size-2 animate-pulse rounded-full bg-red-500" />
               {fmt(seconds)} · {stageLabel}
-              <span className="opacity-70">· يسجّل</span>
+              <span className="opacity-70">· {t.recording}</span>
             </div>
           )}
 
@@ -1265,20 +1287,20 @@ function StudioPage() {
               className="rounded-full bg-primary/90 px-4 py-2 text-xs text-primary-foreground hover:opacity-100"
             >
               {paused ? <Play className="me-1 inline size-3.5" /> : <Pause className="me-1 inline size-3.5" />}
-              {paused ? "متابعة" : "إيقاف مؤقت"}
+              {paused ? t.resume : t.pause}
             </button>
             <button
               onClick={skipQueue}
               className="rounded-full bg-muted/90 px-4 py-2 text-xs text-muted-foreground hover:bg-muted"
             >
               <SkipForward className="me-1 inline size-3.5" />
-              تخطّي
+              {t.skip}
             </button>
             <button
               onClick={stopQueue}
               className="rounded-full bg-destructive/90 px-4 py-2 text-xs text-destructive-foreground hover:opacity-100"
             >
-              إيقاف الطابور
+              {t.stopQueue}
             </button>
           </div>
         )}
@@ -1295,7 +1317,7 @@ function StudioPage() {
                   <input
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
-                    placeholder="ابحث في مواقعك…"
+                    placeholder={t.searchPlaceholder}
                     className="w-full bg-transparent py-2 text-xs outline-none"
                   />
                 </div>
@@ -1303,13 +1325,13 @@ function StudioPage() {
                   onClick={() => setSelected(Object.fromEntries(SITES.map((s) => [s.url, true])))}
                   className="shrink-0 rounded-lg border border-border px-3 py-2 text-xs hover:border-primary"
                 >
-                  اختيار الكل ({SITES.length})
+                  {t.selectAll(SITES.length)}
                 </button>
                 <button
                   onClick={() => setSelected({})}
                   className="shrink-0 rounded-lg border border-border px-3 py-2 text-xs hover:border-primary"
                 >
-                  مسح
+                  {t.clear}
                 </button>
               </div>
 
@@ -1338,7 +1360,7 @@ function StudioPage() {
 
               <div className="mt-3">
                 <label className="mb-1 block text-[11px] text-muted-foreground">
-                  مواقع جديدة لم تُضف بعد (رابط في كل سطر)
+                  {t.extraLabel}
                 </label>
                 <textarea
                   value={extra}
@@ -1354,21 +1376,21 @@ function StudioPage() {
             <div className="space-y-3">
               <div className="rounded-2xl border border-border bg-card/40 p-4 text-xs">
                 <div className="mb-3 flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground">مدة كل فيديو</span>
+                  <span className="text-muted-foreground">{t.durationLabel}</span>
                   <select
                     value={target}
                     onChange={(e) => setTarget(Number(e.target.value))}
                     className="rounded-lg border border-border bg-card/60 px-2 py-1.5 outline-none focus:border-primary"
                   >
                     {DURATIONS.map((d) => (
-                      <option key={d.s} value={d.s}>
-                        {d.label}
+                      <option key={d} value={d}>
+                        {t.minutes(Math.round(d / 60))}
                       </option>
                     ))}
                   </select>
                 </div>
                 <div className="mb-3 flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground">الجودة</span>
+                  <span className="text-muted-foreground">{t.qualityLabel}</span>
                   <select
                     value={quality}
                     onChange={(e) => setQuality(e.target.value as QualityKey)}
@@ -1383,7 +1405,7 @@ function StudioPage() {
                 </div>
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <span className="text-muted-foreground">
-                    <Volume2 className="inline size-3.5" /> الصوت
+                    <Volume2 className="inline size-3.5" /> {t.voiceLabel}
                   </span>
                   <select
                     value={voice}
@@ -1392,13 +1414,13 @@ function StudioPage() {
                   >
                     {VOICES.map((v) => (
                       <option key={v.id} value={v.id}>
-                        صوت {v.label}
+                        {t.voicePrefix} {t[v.key]}
                       </option>
                     ))}
                   </select>
                 </div>
                 <div className="mb-3 flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground">اللغة</span>
+                  <span className="text-muted-foreground">{t.languageLabel}</span>
                   <select
                     value={locale}
                     onChange={(e) => setLocale(e.target.value as NarrationLocale)}
@@ -1412,13 +1434,13 @@ function StudioPage() {
                 <div className="mb-3 flex items-center justify-between gap-2">
 
                   <span className="text-muted-foreground">
-                    <Mic className="inline size-3.5" /> تعليقي بالميكروفون
+                    <Mic className="inline size-3.5" /> {t.micLabel}
                   </span>
                   <button
                     onClick={() => setMic((p) => !p)}
                     className={`rounded-lg border px-2 py-1.5 text-xs ${mic ? "border-primary bg-primary/20 text-primary" : "border-border bg-card/60 text-muted-foreground"}`}
                   >
-                    {mic ? "مفعّل" : "معطّل"}
+                    {mic ? t.on : t.off}
                   </button>
                 </div>
                 <button
@@ -1427,21 +1449,13 @@ function StudioPage() {
                   className="flex w-full items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 hover:border-primary disabled:opacity-50"
                 >
                   <FolderOpen className="size-3.5" />
-                  {folder ? `مجلد الحفظ: ${folder}` : "اختر مجلد الحفظ (E:\\site presentation)"}
+                  {folder ? t.folderIs(folder) : t.chooseFolder}
                 </button>
                 {!supportsFolderSave() && (
                   <p className="mt-2 text-[11px] text-muted-foreground">
-                    متصفحك لا يدعم اختيار مجلد — ستنزل الملفات في مجلد التنزيلات.
+                    {t.noFolderSupport}
                   </p>
                 )}
-              </div>
-
-              <div className="rounded-xl border border-primary/40 bg-primary/10 p-3 text-xs text-primary-foreground">
-                <p className="mb-1 font-semibold">⚠️ ملاحظة مهمة قبل التسجيل</p>
-                <p className="leading-5">
-                  عند الضغط على «ابدأ التسجيل المتواصل»، سيظهر إشعار من Chrome نفسه: <strong>«Autoriser … à voir cet onglet»</strong>.
-                  اختر <strong>«هذا التبويب»</strong> ثم اضغط <strong>Autoriser</strong> — هذا الإشعار إجباري من المتصفح و<strong>لن يظهر في الفيديو</strong>.
-                </p>
               </div>
 
               {(needsManualResume || resumeIn > 0) && (
@@ -1456,7 +1470,7 @@ function StudioPage() {
                   className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary bg-primary/15 px-6 py-3 text-sm font-bold text-primary"
                 >
                   <Play className="size-4" />
-                  {resumeIn > 0 ? `استئناف الآن (تلقائي خلال ${resumeIn}s)` : "استئناف من نفس الموقع"}
+                  {resumeIn > 0 ? t.resumeNow(resumeIn) : t.resumeSame}
                 </button>
               )}
 
@@ -1467,12 +1481,12 @@ function StudioPage() {
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-hero px-6 py-4 text-sm font-bold text-primary-foreground glow-primary disabled:opacity-60"
               >
                 {busy ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
-                ابدأ التسجيل المتواصل ({totalEstimate.count} موقع)
+                {t.startQueue(totalEstimate.count)}
               </button>
 
               {totalEstimate.count > 0 && (
                 <p className="text-center text-[11px] text-muted-foreground">
-                  تقدير: {fmt(totalEstimate.sec)} إجمالاً، حوالي {totalEstimate.mb} ميغابايت
+                  {t.estimate(fmt(totalEstimate.sec), totalEstimate.mb)}
                 </p>
               )}
 
@@ -1486,7 +1500,7 @@ function StudioPage() {
                 ) : (
                   <FileText className="size-3.5" />
                 )}
-                توليد النصوص فقط (بدون تسجيل)
+                {t.textsOnly}
               </button>
 
               {hasFailed && !running && (
@@ -1496,7 +1510,7 @@ function StudioPage() {
                   className="flex w-full items-center justify-center gap-2 rounded-xl border border-destructive px-6 py-3 text-xs text-destructive disabled:opacity-60"
                 >
                   <XCircle className="size-3.5" />
-                  إعادة محاولة المواقع الفاشلة ({queue.filter((p) => p.status === "failed").length})
+                  {t.retryFailed(queue.filter((p) => p.status === "failed").length)}
                 </button>
               )}
             </div>
@@ -1509,7 +1523,7 @@ function StudioPage() {
             <div className="mb-4">
               <div className="mb-2 flex items-baseline justify-between">
                 <p className="text-xs text-muted-foreground">
-                  التقدّم: {Math.max(0, current + 1)} من {stats.total}
+                  {t.progress(Math.max(0, current + 1), stats.total)}
                 </p>
                 <p className="text-sm font-bold text-primary">{percent}%</p>
               </div>
@@ -1521,11 +1535,11 @@ function StudioPage() {
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
                 {[
-                  { label: "منتهية", value: stats.done, cls: "text-primary" },
-                  { label: "قيد العمل", value: stats.runningCount, cls: "text-primary" },
-                  { label: "في الانتظار", value: stats.pending, cls: "text-muted-foreground" },
-                  { label: "فاشلة", value: stats.failed, cls: "text-destructive" },
-                  { label: "متخطّاة", value: stats.skipped, cls: "text-muted-foreground" },
+                  { label: t.statDone, value: stats.done, cls: "text-primary" },
+                  { label: t.statRunning, value: stats.runningCount, cls: "text-primary" },
+                  { label: t.statPending, value: stats.pending, cls: "text-muted-foreground" },
+                  { label: t.statFailed, value: stats.failed, cls: "text-destructive" },
+                  { label: t.statSkipped, value: stats.skipped, cls: "text-muted-foreground" },
                 ].map((s) => (
                   <div
                     key={s.label}
@@ -1578,18 +1592,11 @@ function StudioPage() {
 
         {!running && (
           <ol className="mt-8 list-decimal space-y-2 ps-5 text-xs text-muted-foreground">
-            <li>اختر مواقعك (أو «اختيار الكل») وألصق أي موقع جديد في الخانة السفلية.</li>
-            <li>اختر مجلد الحفظ مرة واحدة — بعدها تُحفظ كل الملفات فيه تلقائياً.</li>
-            <li>
-              اضغط «ابدأ التسجيل المتواصل» — سيظهر إشعار من Chrome: اختر «هذا التبويب» ثم اضغط Autoriser (مرة واحدة).
-              هذا الإشعار إجباري من المتصفح و<strong>لا يظهر في الفيديو</strong>.
-            </li>
-            <li>
-              كل موقع: جولة ≥ ٣ دقائق + تعليق صوتي + نص أسفل الفيديو، ثم MP4 و TXT و SRT باسم
-              الموقع.
-            </li>
-            <li>ينتقل للموقع التالي تلقائياً حتى ينتهي الطابور.</li>
-            <li>إذا نفدت أرصدة الذكاء الاصطناعي، يستمر التسجيل بدون صوت وتظهر وسوم مقترحة.</li>
+            <li>{t.step1}</li>
+            <li>{t.step2}</li>
+            <li>{t.step3}</li>
+            <li>{t.step4}</li>
+            <li>{t.step5}</li>
           </ol>
         )}
       </section>
