@@ -793,10 +793,17 @@ function StudioPage() {
           skipRef.current = false;
         } else {
           console.error(e);
+          const blocked = e instanceof Error && e.message === "embed-blocked";
+          if (blocked) toast.error(`${items[i].name}: الموقع يمنع التضمين — سيُعاد لاحقاً.`);
           setQueue((prev) =>
-            prev.map((p, j) => (j === i ? { ...p, status: "failed", note: "تعذّر التسجيل" } : p)),
+            prev.map((p, j) =>
+              j === i
+                ? { ...p, status: "failed", note: blocked ? "الموقع يمنع التضمين" : "تعذّر التسجيل" }
+                : p,
+            ),
           );
         }
+
       }
       await pauseAwareSleep(800);
     }
