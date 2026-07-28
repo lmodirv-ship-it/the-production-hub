@@ -832,8 +832,47 @@ function StudioPage() {
 
   }
 
-  async function startQueue() {
-    const items = retryItems.length ? retryItems : buildQueue();
+  function cancelAutoResume() {
+    if (autoResumeTimerRef.current) {
+      window.clearInterval(autoResumeTimerRef.current);
+      autoResumeTimerRef.current = null;
+    }
+    setResumeIn(0);
+  }
+
+  function scheduleAutoResume(items: QueueItem[]) {
+    if (autoResumeAttemptsRef.current >= 5) {
+      setNeedsManualResume(true);
+      setMessage("توقّف التسجيل — اضغط «استئناف» للمتابعة من نفس الموقع.");
+      return;
+    }
+    const attempt = autoResumeAttemptsRef.current;
+    autoResumeAttemptsRef.current = attempt + 1;
+    const delay = Math.min(3 * Math.pow(2, attempt), 12);
+    pendingResumeRef.current = items;
+    setNeedsManualResume(false);
+    let left = delay;
+    setResumeIn(left);
+    setMessage(`استئناف تلقائي خلال ${left} ثوانٍ…`);
+    cancelAutoResume();
+    autoResumeTimerRef.current = window.setInterval(() => {
+      left -= 1;
+      setResumeIn(left);
+      if (left > 0) {
+        setMessage(`استئناف تلقائي خلال ${left} ثوانٍ…`);
+        return;
+      }
+      cancelAutoResume();
+      const rest = pendingResumeRef.current;
+      pendingResumeRef.current = null;
+      if (rest?.length) void startQueueRef.current(rest);
+    }, 1000);
+  }
+
+  async function startQueue(resumeWith?: QueueItem[]) {
+    cancelAutoResume();
+    setNeedsManualResume(false);
+    const items = resumeWith?.length ? resumeWith : retryItems.length ? retryItems : buildQueue();
     if (!items.length) {
       toast.error("اختر موقعاً واحداً على الأقل.");
       return;
@@ -843,7 +882,7 @@ function StudioPage() {
       return;
     }
 
-    if (quality === "uhd") {
+    if (!resumeWith && quality === "uhd") {
       const ok = window.confirm(
         "4K مكثف جداً للمتصفح وقد يتعطل لمدة طويلة. هل تريد الاستمرار بجودة 4K؟",
       );
@@ -853,14 +892,16 @@ function StudioPage() {
       }
     }
 
+    if (!resumeWith) autoResumeAttemptsRef.current = 0;
+
     setRetryItems([]);
     setRunning(true);
     pausedRef.current = false;
     shareEndedRef.current = false;
+    userStoppedRef.current = false;
+    abortRef.current = false;
     setPaused(false);
     setMessage("سيطلب Chrome مشاركة التبويب. اختر هذا التبويب ثم اضغط Autoriser — مرة واحدة فقط.");
-
-
 
     let display: MediaStream;
     try {
@@ -879,7 +920,15 @@ function StudioPage() {
     } catch (err) {
       console.error(err);
       setRunning(false);
-      setMessage("تم إلغاء المشاركة. اضغط «ابدأ» للمحاولة مجدداً.");
+      if (resumeWith?.length) {
+        // browser refused an automatic re-share: ask for one click
+        setRetryItems(resumeWith);
+        pendingResumeRef.current = resumeWith;
+        setNeedsManualResume(true);
+        setMessage("المتصفح يحتاج نقرة لإعادة المشاركة — اضغط «استئناف» للمتابعة من نفس الموقع.");
+      } else {
+        setMessage("تم إلغاء المشاركة. اضغط «ابدأ» للمحاولة مجدداً.");
+      }
       return;
     }
     displayRef.current = display;
@@ -897,9 +946,7 @@ function StudioPage() {
     vt.addEventListener("ended", () => {
       shareEndedRef.current = true;
       abortRef.current = true;
-      toast.error("انتهت مشاركة الشاشة. سأُوقف الحالية وأضعها في قائمة إعادة المحاولة.");
     });
-
 
     if (mic) {
       await startMic();
@@ -913,9 +960,6 @@ function StudioPage() {
       }
       await sleep(700);
     }
-    toast.info("اطوِ شريط مشاركة Chrome بسهم الطيّ — لا يظهر داخل الفيديو على أي حال.", {
-      duration: 6000,
-    });
 
     await runQueue(items);
 
@@ -930,9 +974,19 @@ function StudioPage() {
     setFrameState("idle");
     setActiveItem(null);
 
+    const resumeItems = pendingResumeRef.current;
+    if (resumeItems?.length && !userStoppedRef.current) {
+      scheduleAutoResume(resumeItems);
+      return;
+    }
+
+    autoResumeAttemptsRef.current = 0;
     setMessage(abortRef.current ? "تم إيقاف الطابور." : "اكتمل الطابور — كل الفيديوهات والنصوص جاهزة.");
     if (!abortRef.current) toast.success("اكتملت كل الفيديوهات.");
   }
+
+  startQueueRef.current = startQueue;
+
 
   function stopQueue() {
     abortRef.current = true;
