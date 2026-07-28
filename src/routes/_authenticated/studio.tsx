@@ -96,6 +96,8 @@ const DURATIONS = [
 const INTRO_MS = 3500;
 const OUTRO_MS = 3500;
 const CHUNK_SECONDS = 60;
+const EMBED_TIMEOUT_MS = 8000;
+
 
 const STORAGE_KEYS = {
   selected: "eco-selected",
