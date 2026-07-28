@@ -1133,7 +1133,17 @@ function StudioPage() {
               {fmt(seconds)} · {stageLabel}
             </div>
           )}
+
+          {!running && <div className="tv-glare pointer-events-none absolute inset-0" />}
         </div>
+        {!running && (
+          <>
+            <div className="mx-auto mt-1 h-4 w-1/5 rounded-b-md bg-gradient-to-b from-neutral-700 to-neutral-900" />
+            <div className="mx-auto h-2 w-2/5 rounded-full bg-neutral-800/80" />
+          </>
+        )}
+        </div>
+
 
         {running && (
           <div className="fixed bottom-4 left-4 z-[60] flex items-center gap-2">
