@@ -586,8 +586,10 @@ function StudioPage() {
         continue;
       }
       setFrameState("ready");
+      setFade(false);
       // let the site paint its first frames before we start moving
       await pauseAwareSleep(900);
+
 
       if (abortRef.current || skipRef.current) break;
 
