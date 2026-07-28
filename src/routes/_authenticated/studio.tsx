@@ -231,11 +231,18 @@ function StudioPage() {
   useEffect(() => {
     const el = shellRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setScale(el.clientWidth / q.width));
+    // preview: fit by width. recording: cover the whole surface so no black bars remain.
+    const compute = () => {
+      const byW = el.clientWidth / q.width;
+      const byH = el.clientHeight / q.height;
+      setScale(running ? Math.max(byW, byH) : byW);
+    };
+    const ro = new ResizeObserver(compute);
     ro.observe(el);
-    setScale(el.clientWidth / q.width);
+    compute();
     return () => ro.disconnect();
-  }, [q.width]);
+  }, [q.width, q.height, running]);
+
 
   useEffect(() => {
     return () => {
