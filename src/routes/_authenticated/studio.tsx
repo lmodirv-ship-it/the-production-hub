@@ -20,6 +20,7 @@ import {
   Mic,
 } from "lucide-react";
 import { SITES } from "@/data/sites";
+import { LANGS, applyDocumentLang, dirOf, tr, type Lang } from "@/lib/i18n";
 import { discoverPages } from "@/lib/pages.functions";
 import { generateLongNarration, synthesizeSpeech, type NarrationLocale } from "@/lib/narration.functions";
 import { startCompositor } from "@/lib/compositor";
@@ -81,17 +82,13 @@ export const Route = createFileRoute("/_authenticated/studio")({
 });
 
 const VOICES = [
-  { id: "alloy", label: "هادئ" },
-  { id: "verse", label: "حيوي" },
-  { id: "sage", label: "رصين" },
-  { id: "coral", label: "دافئ" },
+  { id: "alloy", key: "voiceCalm" as const },
+  { id: "verse", key: "voiceLively" as const },
+  { id: "sage", key: "voiceSerious" as const },
+  { id: "coral", key: "voiceWarm" as const },
 ];
 
-const DURATIONS = [
-  { s: MIN_VIDEO_SECONDS, label: "٥ دقائق" },
-  { s: 360, label: "٦ دقائق" },
-  { s: 240, label: "٤ دقائق" },
-];
+const DURATIONS = [MIN_VIDEO_SECONDS, 360, 240];
 
 const INTRO_MS = 3500;
 const OUTRO_MS = 3500;
@@ -164,7 +161,7 @@ function StudioPage() {
   const [running, setRunning] = useState(false);
   const [paused, setPaused] = useState(false);
   const [textOnly, setTextOnly] = useState(false);
-  const [message, setMessage] = useState("اختر مواقعك من القائمة ثم اضغط «ابدأ التسجيل المتواصل».");
+  const [message, setMessage] = useState("");
   const [seconds, setSeconds] = useState(0);
   const [caption, setCaption] = useState("");
   const [stageLabel, setStageLabel] = useState("");
@@ -216,6 +213,18 @@ function StudioPage() {
   const captionsRef = useRef<TimedCaption[]>([]);
   const currentPageTextRef = useRef("");
   const currentPageEndRef = useRef(0);
+
+  const lang = locale as Lang;
+  const t = useMemo(() => tr(lang), [lang]);
+  const dir = dirOf(lang);
+
+  useEffect(() => {
+    applyDocumentLang(lang);
+  }, [lang]);
+
+  useEffect(() => {
+    setMessage((m) => (m ? m : t.msgIdle));
+  }, [t]);
 
   const q = useMemo(() => QUALITY[quality], [quality]);
   const tall = q.height * depth;
@@ -312,7 +321,7 @@ function StudioPage() {
   /* ---------------- narration helpers ---------------- */
 
   async function planSite(item: QueueItem) {
-    setMessage(`اكتشاف صفحات ${item.name}…`);
+    setMessage(t.msgDiscover(item.name));
     let paths: string[] = ["/"];
     try {
       const res = await discoverPages({ data: { url: item.url } });
@@ -321,7 +330,7 @@ function StudioPage() {
       /* single page tour */
     }
 
-    setMessage(`كتابة النص (${wordsForSeconds(target)} كلمة) لـ ${item.name}…`);
+    setMessage(t.msgWriting(wordsForSeconds(target), item.name));
     const narration = await generateLongNarration({
       data: {
         url: item.url,
@@ -334,7 +343,7 @@ function StudioPage() {
 
 
     if (narration.fallback) {
-      toast.info(`استُخدم سكربت احتياطي لـ ${item.name} بدون ذكاء اصطناعي.`);
+      toast.info(t.tFallback(item.name));
     }
 
     Object.values(clipsRef.current).forEach((c) => URL.revokeObjectURL(c.url));
@@ -345,7 +354,7 @@ function StudioPage() {
     for (let i = 0; i < narration.items.length; i++) {
       if (abortRef.current || skipRef.current) break;
       const it = narration.items[i];
-      setMessage(`توليد الصوت ${i + 1}/${narration.items.length} — ${item.name}`);
+      setMessage(t.msgVoice(i + 1, narration.items.length, item.name));
       let secs = Math.max(12, Math.ceil(it.text.length / 14));
 
       if (mic) {
@@ -440,7 +449,7 @@ function StudioPage() {
       return stream;
     } catch (e) {
       console.error(e);
-      toast.error("لم يُسمح بالميكروفون — سيتم التسجيل بدون صوتك.");
+      toast.error(t.tMicDenied);
       setMic(false);
       return null;
     }
@@ -476,7 +485,7 @@ function StudioPage() {
     if (inputChunks.length === 0) return new Blob([], { type: "video/mp4" });
     if (inputChunks.length === 1 && inputChunks[0].type.startsWith("video/mp4")) return inputChunks[0];
 
-    setMessage("جاري التحويل إلى MP4…");
+    setMessage(t.msgConverting);
     try {
       const { FFmpeg } = await import("@ffmpeg/ffmpeg");
       const { fetchFile, toBlobURL } = await import("@ffmpeg/util");
@@ -716,7 +725,7 @@ function StudioPage() {
       secondsRef.current += 1;
       setSeconds((s) => s + 1);
     }, 1000);
-    setMessage(`جارٍ تصوير ${item.name} — لا تلمس شيئاً.`);
+    setMessage(t.msgShooting(item.name));
 
     let captions: TimedCaption[] = [];
     try {
@@ -749,7 +758,7 @@ function StudioPage() {
     const fullScript = scripts.map((s) => s.text).join("\n\n");
     const total = stops.reduce((a, s) => a + s.seconds, 0) + Math.round((INTRO_MS + OUTRO_MS) / 1000);
 
-    setMessage(`حفظ ملفات ${item.name}…`);
+    setMessage(t.msgSaving(item.name));
     const where = await saveFile(finalBlob, `${base}.${ext}`);
     await saveFile(
       buildDescriptionFile({ name: item.name, url: item.url, seconds: total, script: fullScript, locale }),
@@ -783,31 +792,31 @@ function StudioPage() {
                   ...p,
                   status: "done",
                   note: audioFailed
-                    ? "تم الحفظ (بدون تعليق صوتي)"
+                    ? t.noteSavedNoAudio
                     : where === "folder"
-                      ? "حُفظ في المجلد"
-                      : "نزل للتنزيلات",
+                      ? t.noteSavedFolder
+                      : t.noteDownloaded,
                 }
               : p,
           ),
         );
         if (audioFailed) {
-          toast.warning(`تم تسجيل ${items[i].name} بدون تعليق صوتي.`);
+          toast.warning(t.tNoAudio(items[i].name));
         }
       } catch (e) {
         if (skipRef.current) {
           setQueue((prev) =>
-            prev.map((p, j) => (j === i ? { ...p, status: "skipped", note: "تم تخطّيه" } : p)),
+            prev.map((p, j) => (j === i ? { ...p, status: "skipped", note: t.noteSkipped } : p)),
           );
           skipRef.current = false;
         } else {
           console.error(e);
           const blocked = e instanceof Error && e.message === "embed-blocked";
-          if (blocked) toast.error(`${items[i].name}: الموقع يمنع التضمين — سيُعاد لاحقاً.`);
+          if (blocked) toast.error(t.tBlocked(items[i].name));
           setQueue((prev) =>
             prev.map((p, j) =>
               j === i
-                ? { ...p, status: "failed", note: blocked ? "الموقع يمنع التضمين" : "تعذّر التسجيل" }
+                ? { ...p, status: "failed", note: blocked ? t.noteBlocked : t.noteFailed }
                 : p,
             ),
           );
@@ -820,7 +829,7 @@ function StudioPage() {
     if (shareEndedRef.current) {
       const idx = currentIndexRef.current;
       if (idx >= 0 && idx < items.length) {
-        const rest = items.slice(idx).map((f) => ({ ...f, status: "pending" as const, note: "معلّق — استئناف تلقائي" }));
+        const rest = items.slice(idx).map((f) => ({ ...f, status: "pending" as const, note: t.notePendingResume }));
         if (rest.length) {
           setRetryItems(rest);
           pendingResumeRef.current = rest;
@@ -845,7 +854,7 @@ function StudioPage() {
   function scheduleAutoResume(items: QueueItem[]) {
     if (autoResumeAttemptsRef.current >= 5) {
       setNeedsManualResume(true);
-      setMessage("توقّف التسجيل — اضغط «استئناف» للمتابعة من نفس الموقع.");
+      setMessage(t.msgStoppedManual);
       return;
     }
     const attempt = autoResumeAttemptsRef.current;
@@ -855,13 +864,13 @@ function StudioPage() {
     setNeedsManualResume(false);
     let left = delay;
     setResumeIn(left);
-    setMessage(`استئناف تلقائي خلال ${left} ثوانٍ…`);
+    setMessage(t.msgAutoResume(left));
     cancelAutoResume();
     autoResumeTimerRef.current = window.setInterval(() => {
       left -= 1;
       setResumeIn(left);
       if (left > 0) {
-        setMessage(`استئناف تلقائي خلال ${left} ثوانٍ…`);
+        setMessage(t.msgAutoResume(left));
         return;
       }
       cancelAutoResume();
@@ -876,18 +885,16 @@ function StudioPage() {
     setNeedsManualResume(false);
     const items = resumeWith?.length ? resumeWith : retryItems.length ? retryItems : buildQueue();
     if (!items.length) {
-      toast.error("اختر موقعاً واحداً على الأقل.");
+      toast.error(t.tPickOne);
       return;
     }
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getDisplayMedia) {
-      toast.error("متصفحك لا يدعم التسجيل. استخدم Chrome أو Edge على الحاسوب.");
+      toast.error(t.tNoSupport);
       return;
     }
 
     if (!resumeWith && quality === "uhd") {
-      const ok = window.confirm(
-        "4K مكثف جداً للمتصفح وقد يتعطل لمدة طويلة. هل تريد الاستمرار بجودة 4K؟",
-      );
+      const ok = window.confirm(t.tConfirm4k);
       if (!ok) {
         setQuality("ultra");
         return;
@@ -903,7 +910,7 @@ function StudioPage() {
     userStoppedRef.current = false;
     abortRef.current = false;
     setPaused(false);
-    setMessage("سيطلب Chrome مشاركة التبويب. اختر هذا التبويب ثم اضغط Autoriser — مرة واحدة فقط.");
+    setMessage(t.msgSharing);
 
     let display: MediaStream;
     try {
@@ -927,9 +934,9 @@ function StudioPage() {
         setRetryItems(resumeWith);
         pendingResumeRef.current = resumeWith;
         setNeedsManualResume(true);
-        setMessage("المتصفح يحتاج نقرة لإعادة المشاركة — اضغط «استئناف» للمتابعة من نفس الموقع.");
+        setMessage(t.msgNeedsClick);
       } else {
-        setMessage("تم إلغاء المشاركة. اضغط «ابدأ» للمحاولة مجدداً.");
+        setMessage(t.msgShareCancelled);
       }
       return;
     }
@@ -983,8 +990,8 @@ function StudioPage() {
     }
 
     autoResumeAttemptsRef.current = 0;
-    setMessage(abortRef.current ? "تم إيقاف الطابور." : "اكتمل الطابور — كل الفيديوهات والنصوص جاهزة.");
-    if (!abortRef.current) toast.success("اكتملت كل الفيديوهات.");
+    setMessage(abortRef.current ? t.msgQueueStopped : t.msgQueueDone);
+    if (!abortRef.current) toast.success(t.tAllDone);
   }
 
   startQueueRef.current = startQueue;
@@ -1040,7 +1047,7 @@ function StudioPage() {
     clearCaptionTimers();
     compositorRef.current?.setCaption("");
     setCaption("");
-    setMessage("تم الإيقاف المؤقت — اضغط متابعة للاستئناف.");
+    setMessage(t.msgPaused);
   }
 
   function resumeQueue() {
@@ -1062,13 +1069,13 @@ function StudioPage() {
     if (remaining > 0 && currentPageTextRef.current && captionsRef.current) {
       scheduleCaptions(currentPageTextRef.current, remaining, secondsRef.current, captionsRef.current);
     }
-    setMessage("جارٍ الاستئناف…");
+    setMessage(t.msgResuming);
   }
 
   async function retryFailed() {
     const failed = queue.filter((p) => p.status === "failed");
     if (!failed.length) {
-      toast.error("لا يوجد مواقع فاشلة لإعادة المحاولة.");
+      toast.error(t.tNoFailed);
       return;
     }
     setRetryItems(failed.map((p) => ({ ...p, status: "pending" as QueueStatus, note: "" })));
@@ -1081,7 +1088,7 @@ function StudioPage() {
   async function generateTextsOnly() {
     const items = buildQueue();
     if (!items.length) {
-      toast.error("اختر أو ألصق موقعاً واحداً على الأقل.");
+      toast.error(t.tPickOrPaste);
       return;
     }
     setTextOnly(true);
@@ -1091,7 +1098,7 @@ function StudioPage() {
         setCurrent(i);
         currentIndexRef.current = i;
         setQueue((prev) => prev.map((p, j) => (j === i ? { ...p, status: "running" } : p)));
-        setMessage(`كتابة نص ${items[i].name}…`);
+        setMessage(t.msgWritingText(items[i].name));
         try {
           let paths = ["/"];
           try {
@@ -1122,16 +1129,16 @@ function StudioPage() {
           );
 
           setQueue((prev) =>
-            prev.map((p, j) => (j === i ? { ...p, status: "done", note: "نص جاهز" } : p)),
+            prev.map((p, j) => (j === i ? { ...p, status: "done", note: t.noteTextReady } : p)),
           );
         } catch (e) {
           console.error(e);
           setQueue((prev) =>
-            prev.map((p, j) => (j === i ? { ...p, status: "failed", note: "تعذّر التوليد" } : p)),
+            prev.map((p, j) => (j === i ? { ...p, status: "failed", note: t.noteGenFailed } : p)),
           );
         }
       }
-      setMessage("تم توليد كل النصوص.");
+      setMessage(t.msgTextsDone);
     } finally {
       setTextOnly(false);
     setCurrent(-1);
@@ -1145,9 +1152,9 @@ function StudioPage() {
     try {
       const n = await pickFolder();
       setFolder(n);
-      toast.success(`سيتم الحفظ في مجلد ${n}`);
+      toast.success(t.tFolderSet(n));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "تعذّر اختيار المجلد.");
+      toast.error(e instanceof Error ? e.message : t.tFolderError);
     }
   }
 
