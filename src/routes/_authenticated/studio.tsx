@@ -627,8 +627,11 @@ function StudioPage() {
   /* ---------------- one site ---------------- */
 
   async function recordOne(item: QueueItem): Promise<RecordResult> {
+    setActiveItem(item);
+    setFrameState("loading");
     const { stops, scripts, audioFailed: ttsFailed } = await planSite(item);
     if (abortRef.current || skipRef.current) throw new Error("skip");
+
 
     const comp = startCompositor(displayRef.current!, q.width, q.height, q.fps, locale);
     compositorRef.current = comp;
