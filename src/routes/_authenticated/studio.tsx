@@ -171,6 +171,7 @@ function StudioPage() {
 
   const [frameSrc, setFrameSrc] = useState("");
   const [frameState, setFrameState] = useState<"idle" | "loading" | "ready" | "blocked">("idle");
+  const [frameKey, setFrameKey] = useState(0);
   const [activeItem, setActiveItem] = useState<{ name: string; url: string; description?: string } | null>(null);
   const [offset, setOffset] = useState(0);
   const [fade, setFade] = useState(false);
