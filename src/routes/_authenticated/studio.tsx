@@ -1156,7 +1156,27 @@ function StudioPage() {
             </div>
           )}
 
-          {!frameSrc && !busy && (
+          {/* loading / blocked poster — replaces the black seconds at the start of every site */}
+          {running && activeItem && frameState !== "ready" && (
+            <div className="absolute inset-0 grid place-items-center bg-gradient-hero px-10 text-center">
+              <div className="max-w-3xl">
+                <p className="text-3xl font-black text-primary-foreground md:text-5xl">
+                  {activeItem.name}
+                </p>
+                <p className="mt-3 text-base text-primary-foreground/80 md:text-xl">{activeItem.url}</p>
+                {activeItem.description && (
+                  <p className="mt-6 text-sm leading-8 text-primary-foreground/90 md:text-lg">
+                    {activeItem.description}
+                  </p>
+                )}
+                <p className="mt-8 text-xs text-primary-foreground/70">
+                  {frameState === "blocked" ? "هذا الموقع يمنع التضمين" : "جارٍ تحميل الموقع…"}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {!frameSrc && !busy && !running && (
             <div className="absolute inset-0 grid place-items-center text-center px-6">
               <div className="text-sm text-muted-foreground">
                 <Video className="mx-auto mb-3 size-8 opacity-50" />
@@ -1169,8 +1189,17 @@ function StudioPage() {
             <div className="absolute top-3 right-3 flex items-center gap-2 rounded-full bg-black/70 px-3 py-1.5 text-xs text-white">
               <span className="size-2 animate-pulse rounded-full bg-red-500" />
               {fmt(seconds)} · {stageLabel}
+              <span className="opacity-70">
+                ·{" "}
+                {frameState === "ready"
+                  ? "يسجّل"
+                  : frameState === "blocked"
+                    ? "ممنوع التضمين"
+                    : "جارٍ التحميل"}
+              </span>
             </div>
           )}
+
 
           {!running && <div className="tv-glare pointer-events-none absolute inset-0" />}
         </div>
