@@ -1050,6 +1050,17 @@ function StudioPage() {
   const busy = running || textOnly;
   const hasFailed = queue.some((p) => p.status === "failed");
 
+  const stats = {
+    total: queue.length,
+    done: queue.filter((p) => p.status === "done").length,
+    failed: queue.filter((p) => p.status === "failed").length,
+    skipped: queue.filter((p) => p.status === "skipped").length,
+    runningCount: queue.filter((p) => p.status === "running").length,
+    pending: queue.filter((p) => p.status === "pending").length,
+  };
+  const finished = stats.done + stats.failed + stats.skipped;
+  const percent = stats.total ? Math.round((finished / stats.total) * 100) : 0;
+
   return (
     <main className="min-h-screen grid-bg">
       <audio ref={narrationElRef} className="hidden" />
