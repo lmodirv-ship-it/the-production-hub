@@ -109,4 +109,26 @@
       linear-gradient(90deg, oklch(1 0 0 / 4%) 1px, transparent 1px);
     background-size: 32px 32px;
   }
+  /* TV set look — light on the GPU: no blur, no animation */
+  .tv-set {
+    padding: clamp(10px, 1.1vw, 22px);
+    border-radius: 22px;
+    background: linear-gradient(180deg, oklch(0.3 0.02 290), oklch(0.16 0.01 290));
+    box-shadow:
+      0 1px 0 oklch(1 0 0 / 12%) inset,
+      0 24px 60px -20px oklch(0 0 0 / 70%);
+  }
+  .tv-screen {
+    border-radius: 12px;
+    box-shadow:
+      0 0 0 2px oklch(0 0 0 / 85%),
+      0 0 0 3px oklch(1 0 0 / 8%),
+      0 0 60px oklch(0.68 0.22 305 / 18%);
+    contain: paint;
+  }
+  .tv-glare {
+    border-radius: 12px;
+    background: linear-gradient(115deg, oklch(1 0 0 / 7%) 0%, transparent 32%, transparent 100%);
+  }
+
 }
