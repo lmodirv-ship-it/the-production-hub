@@ -992,9 +992,14 @@ function StudioPage() {
 
   function stopQueue() {
     abortRef.current = true;
+    userStoppedRef.current = true;
+    pendingResumeRef.current = null;
+    cancelAutoResume();
+    setNeedsManualResume(false);
     skipRef.current = false;
     pausedRef.current = false;
     setPaused(false);
+
     cancelScrollRef.current.cancel();
     clearCaptionTimers();
     narrationElRef.current?.pause();
