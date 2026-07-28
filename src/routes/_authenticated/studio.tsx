@@ -1157,25 +1157,8 @@ function StudioPage() {
             </div>
           )}
 
-          {/* loading / blocked poster — replaces the black seconds at the start of every site */}
-          {running && activeItem && frameState !== "ready" && (
-            <div className="absolute inset-0 grid place-items-center bg-gradient-hero px-10 text-center">
-              <div className="max-w-3xl">
-                <p className="text-3xl font-black text-primary-foreground md:text-5xl">
-                  {activeItem.name}
-                </p>
-                <p className="mt-3 text-base text-primary-foreground/80 md:text-xl">{activeItem.url}</p>
-                {activeItem.description && (
-                  <p className="mt-6 text-sm leading-8 text-primary-foreground/90 md:text-lg">
-                    {activeItem.description}
-                  </p>
-                )}
-                <p className="mt-8 text-xs text-primary-foreground/70">
-                  {frameState === "blocked" ? "هذا الموقع يمنع التضمين" : "جارٍ تحميل الموقع…"}
-                </p>
-              </div>
-            </div>
-          )}
+
+
 
           {!frameSrc && !busy && !running && (
             <div className="absolute inset-0 grid place-items-center text-center px-6">
