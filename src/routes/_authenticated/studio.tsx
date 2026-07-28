@@ -199,6 +199,8 @@ function StudioPage() {
   const abortRef = useRef(false);
   const skipRef = useRef(false);
   const shareEndedRef = useRef(false);
+  const userStoppedRef = useRef(false);
+
   const pausedRef = useRef(false);
   const autoResumeAttemptsRef = useRef(0);
   const autoResumeTimerRef = useRef<number | null>(null);
