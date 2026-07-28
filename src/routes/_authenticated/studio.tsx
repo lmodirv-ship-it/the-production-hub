@@ -1444,6 +1444,23 @@ function StudioPage() {
                 </p>
               </div>
 
+              {(needsManualResume || resumeIn > 0) && (
+                <button
+                  onClick={() => {
+                    const rest = pendingResumeRef.current ?? retryItems;
+                    cancelAutoResume();
+                    setNeedsManualResume(false);
+                    pendingResumeRef.current = null;
+                    void startQueue(rest);
+                  }}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary bg-primary/15 px-6 py-3 text-sm font-bold text-primary"
+                >
+                  <Play className="size-4" />
+                  {resumeIn > 0 ? `استئناف الآن (تلقائي خلال ${resumeIn}s)` : "استئناف من نفس الموقع"}
+                </button>
+              )}
+
+
               <button
                 onClick={() => void startQueue()}
                 disabled={busy}
