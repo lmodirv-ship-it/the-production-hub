@@ -549,8 +549,8 @@ function StudioPage() {
       );
     } catch (err) {
       console.error("ffmpeg convert failed", err);
-      toast.error("تعذّر التحويل إلى MP4 — سيُحفظ الملف كما هو.");
       return inputChunks.length === 1 ? inputChunks[0] : new Blob(inputChunks, { type: "video/webm" });
+
     }
   }, []);
 
