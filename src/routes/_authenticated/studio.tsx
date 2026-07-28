@@ -1138,15 +1138,18 @@ function StudioPage() {
                 opacity: fade ? 0 : 1,
               }}
             >
-              {frameSrc ? (
-                <iframe
-                  ref={iframeRef}
-                  src={frameSrc}
-                  title="tour"
-                  className="border-0"
-                  style={{ width: q.width, height: tall, transform: `translateY(${-offset}px)` }}
-                />
-              ) : null}
+              <iframe
+                ref={iframeRef}
+                src={frameSrc || "about:blank"}
+                title="tour"
+                className="border-0"
+                onLoad={() => {
+                  if (!frameSrc) return;
+                  loadedSrcRef.current = frameSrc;
+                  setFrameState("ready");
+                }}
+                style={{ width: q.width, height: tall, transform: `translateY(${-offset}px)` }}
+              />
             </div>
           </div>
 
